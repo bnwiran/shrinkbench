@@ -336,7 +336,6 @@ class Trainer:
 
     def __checkpoint(self, epoch):
         checkpoint_path = self.path / 'checkpoints'
-        print(checkpoint_path)
         checkpoint_path.mkdir(exist_ok=True, parents=True)
         torch.save({
             'model_state_dict': self.model.state_dict(),

@@ -5,21 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="4381a79c-81cb-4915-90c2-b6f2164a5511" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/shrinkbench.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/jupyter/Untitled.ipynb" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/jupyter/Untitled3.ipynb" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/models/tiny_models.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/experiment/base.py" beforeDir="false" afterPath="$PROJECT_DIR$/experiment/base.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/datasets/datasets.py" beforeDir="false" afterPath="$PROJECT_DIR$/datasets/datasets.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/experiment/train.py" beforeDir="false" afterPath="$PROJECT_DIR$/experiment/train.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/jupyter/experiment_tutorial.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/jupyter/experiment_tutorial.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/metrics/accuracy.py" beforeDir="false" afterPath="$PROJECT_DIR$/metrics/accuracy.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/mnistnet.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/mnistnet.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/jupyter/Untitled.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/jupyter/Untitled.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/tiny_models.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/tiny_models.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

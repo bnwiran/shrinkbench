@@ -71,7 +71,8 @@ def dataset_builder(dataset, train=True, normalize=None, preproc=None, path=None
             preproc += [normalize]
         preproc = transforms.Compose(preproc)
 
-    kwargs = {'transform': preproc}
+    kwargs = {'transform': preproc,
+              'download': True}
     if dataset == 'ImageNet':
         kwargs['split'] = 'train' if train else 'val'
     else:
@@ -98,9 +99,9 @@ def CIFAR10(train=True, path=None):
     mean, std = [0.491, 0.482, 0.447], [0.247, 0.243, 0.262]
     normalize = transforms.Normalize(mean=mean, std=std)
     if train:
-        preproc = [transforms.RandomHorizontalFlip(), transforms.RandomCrop(32, 4)]
+        preproc = [transforms.RandomResizedCrop(224), transforms.RandomHorizontalFlip()]
     else:
-        preproc = []
+        preproc = [transforms.Resize(256), transforms.CenterCrop(224)]
     dataset = dataset_builder('CIFAR10', train, normalize, preproc, path)
     dataset.shape = (3, 32, 32)
     return dataset
