@@ -15,6 +15,8 @@ import torch
 from ..util import CSVLogger
 from ..util import printc
 
+import platform
+
 
 class Experiment(ABC):
 
@@ -23,7 +25,9 @@ class Experiment(ABC):
         self.seed = seed
         self.frozen = False
         signal.signal(signal.SIGINT, self.SIGINT_handler)
-        signal.signal(signal.SIGQUIT, self.SIGQUIT_handler)
+
+        if platform.system() != 'Windows':
+            signal.signal(signal.SIGQUIT, self.SIGQUIT_handler)
 
     def add_params(_self, **kwargs):
         if not _self.frozen:
@@ -49,7 +53,7 @@ class Experiment(ABC):
         with open(path, 'w') as f:
             json.dump(self.serializable_params(), f, indent=4)
 
-    def get_path(self):
+    def __get_path(self):
         if hasattr(self, "rootdir"):
             parent = pathlib.Path(self.rootdir)
         else:
@@ -101,7 +105,7 @@ class Experiment(ABC):
 
     def build_logging(self, metrics, path=None, csv=True, tensorboard=False):
         if path is None:
-            self.path = self.get_path()
+            self.path = self.__get_path()
         printc(f"Logging results to {self.path}", color='MAGENTA')
         self.path.mkdir(exist_ok=True, parents=True)
         self.save_params()
