@@ -249,7 +249,8 @@ class Trainer:
         since = time.time()
         history = list()
         epoch = 0
-        best_acc = 0.0
+        best_acc = self.evaluate(valid_dl)['val_acc1']
+        print('best_acc', best_acc)
         try:
             for epoch in range(1, epochs+1):
                 history.append(self.__train_epoch(train_dl, epoch, epochs))

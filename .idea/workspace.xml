@@ -5,10 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="4381a79c-81cb-4915-90c2-b6f2164a5511" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/datasets/datasets.py" beforeDir="false" afterPath="$PROJECT_DIR$/datasets/datasets.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/experiment/train.py" beforeDir="false" afterPath="$PROJECT_DIR$/experiment/train.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/jupyter/Untitled.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/jupyter/Untitled.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/metrics/flops.py" beforeDir="false" afterPath="$PROJECT_DIR$/metrics/flops.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/models/tiny_models.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/tiny_models.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />

@@ -49,8 +49,9 @@ class MobileNetSmallV3(nn.Module):
         if pretrained:
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             dir_path = os.path.dirname(os.path.realpath(__file__))
-            self.backbone.load_state_dict(torch.load(dir_path + "/../checkpoints/mobilenet_v3_small_cifar10.pt",
-                                                     map_location=device))
+            state = torch.load(dir_path + "/../checkpoints/mobilenet_v3_small_cifar10.pt",
+                               map_location=device)
+            self.load_state_dict(state['model_state_dict'])
 
     def forward(self, x):
         with torch.no_grad():

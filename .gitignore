@@ -116,3 +116,5 @@ slurmlog
 scripts/imagenet_profiling_results.csv
 results*
 scripts/*.sh
+
+.idea/
