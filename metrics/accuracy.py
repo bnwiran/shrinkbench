@@ -9,7 +9,7 @@ def correct(output, target, topk=(1,)):
     outputs given target labels. This is done for each value in
     topk. A value is considered correct if target is in the topk
     highest values of output.
-    The values returned are upperbounded by the given batch size
+    The values returned are upperbound by the given batch size
 
     [description]
 

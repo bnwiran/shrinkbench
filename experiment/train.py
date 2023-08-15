@@ -18,7 +18,6 @@ from ..util import printc, OnlineStats
 
 
 class TrainingExperiment(Experiment):
-
     default_dl_kwargs = {'batch_size': 128,
                          'pin_memory': False,
                          'num_workers': 8
@@ -34,8 +33,8 @@ class TrainingExperiment(Experiment):
                  model,
                  seed=42,
                  path=None,
-                 dl_kwargs=dict(),
-                 train_kwargs=dict(),
+                 dl_kwargs: dict = None,
+                 train_kwargs: dict = None,
                  debug=False,
                  pretrained=False,
                  resume=None,
@@ -43,7 +42,11 @@ class TrainingExperiment(Experiment):
                  save_freq=10):
 
         # Default children kwargs
-        super(TrainingExperiment, self).__init__(seed)
+        super().__init__(seed)
+        if train_kwargs is None:
+            train_kwargs = dict()
+        if dl_kwargs is None:
+            dl_kwargs = dict()
         dl_kwargs = {**self.default_dl_kwargs, **dl_kwargs}
         train_kwargs = {**self.default_train_kwargs, **train_kwargs}
 
@@ -127,9 +130,9 @@ class TrainingExperiment(Experiment):
         if not torch.cuda.is_available():
             printc("GPU NOT AVAILABLE, USING CPU!", color="ORANGE")
         self.model.to(self.device)
-        cudnn.benchmark = True   # For fast training.
+        cudnn.benchmark = True  # For fast training.
 
-    def checkpoint(self):
+    def __checkpoint(self):
         checkpoint_path = self.path / 'checkpoints'
         checkpoint_path.mkdir(exist_ok=True, parents=True)
         epoch = self.log_epoch_n
@@ -149,12 +152,11 @@ class TrainingExperiment(Experiment):
                 # Checkpoint epochs
                 # TODO Model checkpointing based on best val loss/acc
                 if epoch % self.save_freq == 0:
-                    self.checkpoint()
+                    self.__checkpoint()
                 # TODO Early stopping
                 # TODO ReduceLR on plateau?
-                self.log(timestamp=time.time()-since)
+                self.log(timestamp=time.time() - since)
                 self.log_epoch(epoch)
-
 
         except KeyboardInterrupt:
             printc(f"\nInterrupted at epoch {epoch}. Tearing Down", color='RED')
@@ -218,6 +220,6 @@ class TrainingExperiment(Experiment):
     def __repr__(self):
         if not isinstance(self.params['model'], str) and isinstance(self.params['model'], torch.nn.Module):
             self.params['model'] = self.params['model'].__module__
-        
+
         assert isinstance(self.params['model'], str), f"\nUnexpected model inputs: {self.params['model']}"
         return json.dumps(self.params, indent=4)

@@ -1,7 +1,7 @@
 """Masked versions of common torch.nn.Modules
 
 Implementations of most common parametric torch layers.
-For vision classification networks the inmense majority of the
+For vision classification networks the majority of the
 parameters are in either Conv2d layers and Dense Layers (called
 Linear in PyTorch)
 
@@ -65,14 +65,14 @@ class MaskedModule(nn.Module):
         # Multiply weights by masks so metrics can count nonzeros
         weight_mask = _ensure_tensor(weight_mask)
         self.weight_mask = _same_device(weight_mask, self.weight)
-        self.weight.data.mul_(weight_mask)
+        self.weight.data.mul_(self.weight_mask)
 
         if bias_mask is not None:
             bias_mask = _ensure_tensor(bias_mask)
             assert self.bias is not None, "Provided layer must have bias for it to be masked"
             assert _same_shape(bias_mask, self.bias), f"Bias Mask must match dimensions"
             self.bias_mask = _same_device(bias_mask, self.bias)
-            self.bias.data.mul_(bias_mask)
+            self.bias.data.mul_(self.bias_mask)
 
 
 class LinearMasked(MaskedModule):
@@ -115,7 +115,7 @@ class Conv2dMasked(MaskedModule):
 
         Constructed from an existing layer, a weight mask (and optionally
         a bias mask). By construction ensures backpropagation does not change
-        masked parameters so they stay at zero.
+        masked parameters, so they stay at zero.
 
         [description]
 
