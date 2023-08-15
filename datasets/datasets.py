@@ -33,21 +33,12 @@ def dataset_path(dataset, path=None):
     if path is None:
         # Look for the dataset in known paths
         if 'DATAPATH' in os.environ:
-            path = os.environ['DATAPATH']
-            paths = [pathlib.Path(p) for p in path.split(':')]
+            path = os.environ['DATAPATH'] + '/' + dataset
         else:
             raise ValueError(f"No path specified. A path must be provided, \n \
                            or the folder must be listed in your DATAPATH")
 
-    paths = [pathlib.Path(p) for p in path.split(':')]
-
-    for p in paths:
-        p = (p / dataset).resolve()
-        if p.exists():
-            print(f"Found {dataset} under {p}")
-            return p
-    else:
-        raise LookupError(f"Could not find {dataset} in {paths}")
+    return path
 
 
 def dataset_builder(dataset, train=True, normalize=None, preproc=None, path=None):
