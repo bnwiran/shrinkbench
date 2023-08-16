@@ -1,4 +1,5 @@
 import json
+from typing import Union
 
 from .train import TrainingExperiment
 
@@ -13,7 +14,7 @@ class PruningExperiment(TrainingExperiment):
                  dataset,
                  model,
                  strategy,
-                 compression,
+                 compression: Union[list[int], int],
                  seed=42,
                  path=None,
                  dl_kwargs=None,
@@ -24,30 +25,29 @@ class PruningExperiment(TrainingExperiment):
                  resume_optim=False,
                  save_freq=10):
 
-        super().__init__(dataset, model, seed, path, dl_kwargs, train_kwargs, debug, pretrained, resume, resume_optim, save_freq)
+        super().__init__(dataset, model, seed, path, dl_kwargs, train_kwargs, debug, pretrained, resume, resume_optim,
+                         save_freq)
 
         self.pruning = None
+        self.strategy = strategy
+        self.compression = [compression] if isinstance(compression, int) else compression
         self.add_params(strategy=strategy, compression=compression)
-
-        self.apply_pruning(strategy, compression)
-
         self.path = path
         self.save_freq = save_freq
 
-    def apply_pruning(self, strategy, compression):
-        constructor = getattr(strategies, strategy)
-        x, y = next(iter(self.train_dl))
-        self.pruning = constructor(self.model, x, y, compression=compression)
-        self.pruning.apply()
-        printc("Masked model", color='GREEN')
-
     def setup(self):
         super().setup()
-        self.save_metrics()
 
     def run(self):
-        if self.pruning.compression > 1:
-            self.run_epochs()
+        for c in self.compression:
+            constructor = getattr(strategies, self.strategy)
+            x, y = next(iter(self.train_dl))
+            self.pruning = constructor(self.model, x, y, compression=c)
+            self.pruning.apply()
+            self.save_metrics()
+
+            if c > 1:
+                self.run_epochs()
 
     def save_metrics(self):
         metrics = self.pruning_metrics()

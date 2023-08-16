@@ -221,7 +221,7 @@ class Trainer:
         acc1 = OnlineStats()
         acc5 = OnlineStats()
 
-        epoch_iter = tqdm(train_dl, file=sys.stdout, ascii=' >=', colour='black')
+        epoch_iter = tqdm(train_dl, file=sys.stdout, ascii=' >=')
         epoch_iter.set_description(f"TRAIN Epoch {epoch}/{epochs}")
 
         self.model.train()
@@ -253,7 +253,7 @@ class Trainer:
         acc1 = OnlineStats()
         acc5 = OnlineStats()
 
-        epoch_iter = tqdm(valid_dl, file=sys.stdout, ascii=' >=', colour='black')
+        epoch_iter = tqdm(valid_dl, file=sys.stdout, ascii=' >=')
         epoch_iter.set_description("VAL")
 
         self.model.eval()
