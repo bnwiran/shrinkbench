@@ -1,6 +1,6 @@
 import json
 
-from .train import TrainingExperiment
+from .train import TrainingExperiment, Trainer
 
 from .. import strategies
 from ..metrics import model_size, flops
@@ -44,6 +44,7 @@ class PruningExperiment(TrainingExperiment):
         printc(f"Running {repr(self)}", color='YELLOW')
         self.to_device()
         self.build_logging(self.train_metrics, self.path)
+        self.trainer = Trainer(self.model, self.path, self.optim, self.loss_func, self.save_freq, self.log)
 
         self.save_metrics()
 
@@ -79,11 +80,12 @@ class PruningExperiment(TrainingExperiment):
         metrics['theoretical_speedup'] = ops / ops_nz
 
         # Accuracy
-        loss, acc1, acc5 = self.run_epoch(False, -1)
-        self.log_epoch(-1)
+        val_metrics = self.trainer.evaluate(self.val_dl)#run_epoch(False, -1)
+        self.log(**val_metrics)
+        self.log_epoch(0)
 
-        metrics['loss'] = loss
-        metrics['val_acc1'] = acc1
-        metrics['val_acc5'] = acc5
+        metrics['loss'] = val_metrics['val_loss']
+        metrics['val_acc1'] = val_metrics['val_acc1']
+        metrics['val_acc5'] = val_metrics['val_acc5']
 
         return metrics

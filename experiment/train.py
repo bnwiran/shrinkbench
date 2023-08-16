@@ -1,9 +1,12 @@
 import pathlib
+import sys
 import time
+from typing import Optional
 
 import torch
 import torchvision.models
 from torch import nn
+from torch.nn import Module
 from torch.utils.data import DataLoader
 from torch.backends import cudnn
 from tqdm import tqdm
@@ -132,83 +135,13 @@ class TrainingExperiment(Experiment):
         self.model.to(self.device)
         cudnn.benchmark = True  # For fast training.
 
-    def __checkpoint(self):
-        checkpoint_path = self.path / 'checkpoints'
-        checkpoint_path.mkdir(exist_ok=True, parents=True)
-        epoch = self.log_epoch_n
-        torch.save({
-            'model_state_dict': self.model.state_dict(),
-            'optim_state_dict': self.optim.state_dict()
-        }, checkpoint_path / f'checkpoint-{epoch}.pt')
-
     def run_epochs(self):
-
         since = time.time()
-        try:
-            for epoch in range(self.epochs):
-                printc(f"Start epoch {epoch}", color='YELLOW')
-                self.train(epoch)
-                self.eval(epoch)
-                # Checkpoint epochs
-                # TODO Model checkpointing based on best val loss/acc
-                if epoch % self.save_freq == 0:
-                    self.__checkpoint()
-                # TODO Early stopping
-                # TODO ReduceLR on plateau?
-                self.log(timestamp=time.time() - since)
-                self.log_epoch(epoch)
 
-        except KeyboardInterrupt:
-            printc(f"\nInterrupted at epoch {epoch}. Tearing Down", color='RED')
+        time_logger = lambda _: self.log(timestamp=time.time() - since)
+        epoch_logger = lambda epoch: self.log_epoch(epoch)
 
-    def run_epoch(self, train, epoch=0):
-        if train:
-            self.model.train()
-            prefix = 'train'
-            dl = self.train_dl
-        else:
-            prefix = 'val'
-            dl = self.val_dl
-            self.model.eval()
-
-        total_loss = OnlineStats()
-        acc1 = OnlineStats()
-        acc5 = OnlineStats()
-
-        epoch_iter = tqdm(dl)
-        epoch_iter.set_description(f"{prefix.capitalize()} Epoch {epoch}/{self.epochs}")
-
-        with torch.set_grad_enabled(train):
-            for i, (x, y) in enumerate(epoch_iter, start=1):
-                x, y = x.to(self.device), y.to(self.device)
-                yhat = self.model(x)
-                loss = self.loss_func(yhat, y)
-                if train:
-                    loss.backward()
-
-                    self.optim.step()
-                    self.optim.zero_grad()
-
-                c1, c5 = correct(yhat, y, (1, 5))
-                total_loss.add(loss.item() / dl.batch_size)
-                acc1.add(c1 / dl.batch_size)
-                acc5.add(c5 / dl.batch_size)
-
-                epoch_iter.set_postfix(loss=total_loss.mean, top1=acc1.mean, top5=acc5.mean)
-
-        self.log(**{
-            f'{prefix}_loss': total_loss.mean,
-            f'{prefix}_acc1': acc1.mean,
-            f'{prefix}_acc5': acc5.mean,
-        })
-
-        return total_loss.mean, acc1.mean, acc5.mean
-
-    def train(self, epoch=0):
-        return self.run_epoch(True, epoch)
-
-    def eval(self, epoch=0):
-        return self.run_epoch(False, epoch)
+        self.trainer.run_epochs(self.train_dl, self.val_dl, self.epochs, [time_logger, epoch_logger])
 
     @property
     def train_metrics(self):
@@ -223,3 +156,119 @@ class TrainingExperiment(Experiment):
 
         assert isinstance(self.params['model'], str), f"\nUnexpected model inputs: {self.params['model']}"
         return json.dumps(self.params, indent=4)
+
+
+class Trainer:
+    def __init__(self, model: Module, path: pathlib.Path, optim, loss_func, save_freq: int = 10,
+                 log: callable = None) -> None:
+        self.model = model
+        self.path = path
+        self.save_freq = save_freq
+        self.optim = optim
+        self.log = log
+        self.loss_func = loss_func
+        self.__to_device()
+
+    def __to_device(self):
+        # Torch CUDA config
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        if not torch.cuda.is_available():
+            printc("GPU NOT AVAILABLE, USING CPU!", color="ORANGE")
+        self.model.to(self.device)
+        cudnn.benchmark = True  # For fast training.
+
+    def run_epochs(self, train_dl, valid_dl, epochs=25, callbacks: Optional[list[callable]] = None):
+        epoch = 0
+        best_acc = 0
+
+        try:
+            for epoch in range(1, epochs + 1):
+                train_metrics = self.__train_epoch(train_dl, epoch, epochs)
+                val_metrics = self.evaluate(valid_dl)
+                val_acc1 = val_metrics['val_acc1']
+
+                if val_acc1 > best_acc:
+                    best_acc = val_acc1
+                    self.__checkpoint(epoch)
+
+                # TODO Early stopping
+                # TODO ReduceLR on plateau?
+
+                if self.log is not None:
+                    self.log(**train_metrics)
+                    self.log(**val_metrics)
+
+                if callbacks is not None:
+                    for callback in callbacks:
+                        callback(epoch)
+
+        except KeyboardInterrupt:
+            printc(f"\nInterrupted at epoch {epoch}. Tearing Down", color='RED')
+
+    def __train_epoch(self, train_dl, epoch, epochs):
+        total_loss = OnlineStats()
+        acc1 = OnlineStats()
+        acc5 = OnlineStats()
+
+        epoch_iter = tqdm(train_dl, file=sys.stdout, ascii=' >=', colour='black')
+        epoch_iter.set_description(f"TRAIN Epoch {epoch}/{epochs}")
+
+        self.model.train()
+        with torch.set_grad_enabled(True):
+            for i, (x, y) in enumerate(epoch_iter, start=1):
+                x, y = x.to(self.device), y.to(self.device)
+                yhat = self.model(x)
+                loss = self.loss_func(yhat, y)
+                loss.backward()
+
+                self.optim.step()
+                self.optim.zero_grad()
+
+                c1, c5 = correct(yhat, y, (1, 5))
+                total_loss.add(loss.item() / train_dl.batch_size)
+                acc1.add(c1 / train_dl.batch_size)
+                acc5.add(c5 / train_dl.batch_size)
+
+                epoch_iter.set_postfix(loss=total_loss.mean, top1=acc1.mean, top5=acc5.mean)
+
+        return {
+            'train_loss': total_loss.mean,
+            'train_acc1': acc1.mean,
+            'train_acc5': acc5.mean,
+        }
+
+    def evaluate(self, valid_dl):
+        total_loss = OnlineStats()
+        acc1 = OnlineStats()
+        acc5 = OnlineStats()
+
+        epoch_iter = tqdm(valid_dl, file=sys.stdout, ascii=' >=', colour='black')
+        epoch_iter.set_description("VAL")
+
+        self.model.eval()
+        with torch.no_grad():
+            for i, (x, y) in enumerate(epoch_iter, start=1):
+                x, y = x.to(self.device), y.to(self.device)
+                yhat = self.model(x)
+                loss = self.loss_func(yhat, y)
+
+                c1, c5 = correct(yhat, y, (1, 5))
+                total_loss.add(loss.item() / valid_dl.batch_size)
+                acc1.add(c1 / valid_dl.batch_size)
+                acc5.add(c5 / valid_dl.batch_size)
+
+                epoch_iter.set_postfix(loss=total_loss.mean, top1=acc1.mean, top5=acc5.mean)
+
+        return {
+            'val_loss': total_loss.mean,
+            'val_acc1': acc1.mean,
+            'val_acc5': acc5.mean,
+        }
+
+    def __checkpoint(self, epoch):
+        checkpoint_path = self.path / 'checkpoints'
+        checkpoint_path.mkdir(exist_ok=True, parents=True)
+        torch.save({
+            'model_state_dict': self.model.state_dict(),
+            'optim_state_dict': self.optim.state_dict()
+        }, checkpoint_path / f'checkpoint-{epoch}.pt')

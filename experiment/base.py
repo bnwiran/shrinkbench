@@ -53,7 +53,7 @@ class Experiment(ABC):
         with open(path, 'w') as f:
             json.dump(self.serializable_params(), f, indent=4)
 
-    def __get_path(self):
+    def _get_path(self):
         if hasattr(self, "rootdir"):
             parent = pathlib.Path(self.rootdir)
         else:
@@ -105,7 +105,7 @@ class Experiment(ABC):
 
     def build_logging(self, metrics, path=None, csv=True, tensorboard=False):
         if path is None:
-            self.path = self.__get_path()
+            self.path = self._get_path()
         printc(f"Logging results to {self.path}", color='MAGENTA')
         self.path.mkdir(exist_ok=True, parents=True)
         self.save_params()
