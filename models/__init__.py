@@ -4,6 +4,7 @@ import pathlib
 
 from .head import replace_head
 from .mnistnet import MnistNet
+from .tiny_models import MobileNetSmallV3
 from .cifar_resnet import (resnet20,
                            resnet32,
                            resnet44,

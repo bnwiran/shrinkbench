@@ -198,7 +198,8 @@ class Trainer:
                 if val_acc1 > best_acc:
                     best_acc = val_acc1
                     self._checkpoint(epoch)
-                elif epoch % self.save_freq == 0:
+
+                if epoch % self.save_freq == 0:
                     self._checkpoint(epoch)
 
                 # TODO Early stopping
@@ -278,7 +279,8 @@ class Trainer:
     def _checkpoint(self, epoch):
         checkpoint_path = self.path / 'checkpoints'
         checkpoint_path.mkdir(exist_ok=True, parents=True)
+        model_name = checkpoint_path / f'checkpoint-{epoch}.pt'
         torch.save({
             'model_state_dict': self.model.state_dict(),
             'optim_state_dict': self.optim.state_dict()
-        }, checkpoint_path / f'checkpoint-{epoch}.pt')
+        }, model_name)
