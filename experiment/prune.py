@@ -1,6 +1,6 @@
 import json
 
-from .train import TrainingExperiment, Trainer
+from .train import TrainingExperiment
 
 from .. import strategies
 from ..metrics import model_size, flops
@@ -16,15 +16,17 @@ class PruningExperiment(TrainingExperiment):
                  compression,
                  seed=42,
                  path=None,
-                 dl_kwargs=dict(),
-                 train_kwargs=dict(),
+                 dl_kwargs=None,
+                 train_kwargs=None,
                  debug=False,
                  pretrained=True,
                  resume=None,
                  resume_optim=False,
                  save_freq=10):
 
-        super(PruningExperiment, self).__init__(dataset, model, seed, path, dl_kwargs, train_kwargs, debug, pretrained, resume, resume_optim, save_freq)
+        super().__init__(dataset, model, seed, path, dl_kwargs, train_kwargs, debug, pretrained, resume, resume_optim, save_freq)
+
+        self.pruning = None
         self.add_params(strategy=strategy, compression=compression)
 
         self.apply_pruning(strategy, compression)
@@ -39,30 +41,24 @@ class PruningExperiment(TrainingExperiment):
         self.pruning.apply()
         printc("Masked model", color='GREEN')
 
-    def run(self):
-        self.freeze()
-        printc(f"Running {repr(self)}", color='YELLOW')
-        self.to_device()
-        self.build_logging(self.train_metrics, self.path)
-        self.trainer = Trainer(self.model, self.path, self.optim, self.loss_func, self.save_freq, self.log)
-
+    def setup(self):
+        super().setup()
         self.save_metrics()
 
+    def run(self):
         if self.pruning.compression > 1:
             self.run_epochs()
 
     def save_metrics(self):
-        self.metrics = self.pruning_metrics()
+        metrics = self.pruning_metrics()
         with open(self.path / 'metrics.json', 'w') as f:
-            json.dump(self.metrics, f, indent=4)
-        printc(json.dumps(self.metrics, indent=4), color='GRASS')
+            json.dump(metrics, f, indent=4)
+        printc(json.dumps(metrics, indent=4), color='GRASS')
         summary = self.pruning.summary()
         summary_path = self.path / 'masks_summary.csv'
         summary.to_csv(summary_path)
-        print(summary)
 
     def pruning_metrics(self):
-
         metrics = {}
         # Model Size
         size, size_nz = model_size(self.model)
@@ -70,8 +66,8 @@ class PruningExperiment(TrainingExperiment):
         metrics['size_nz'] = size_nz
         metrics['compression_ratio'] = size / size_nz
 
-        x, y = next(iter(self.val_dl))
-        x, y = x.to(self.device), y.to(self.device)
+        x, _ = next(iter(self.val_dl))
+        x = x.to(self.trainer.device)
 
         # FLOPS
         ops, ops_nz = flops(self.model, x)
@@ -80,7 +76,7 @@ class PruningExperiment(TrainingExperiment):
         metrics['theoretical_speedup'] = ops / ops_nz
 
         # Accuracy
-        val_metrics = self.trainer.evaluate(self.val_dl)#run_epoch(False, -1)
+        val_metrics = self.trainer.evaluate(self.val_dl)
         self.log(**val_metrics)
         self.log_epoch(0)
 

@@ -1,6 +1,7 @@
 import pathlib
 import sys
 import time
+from abc import abstractmethod
 from typing import Optional
 
 import torch
@@ -46,10 +47,22 @@ class TrainingExperiment(Experiment):
 
         # Default children kwargs
         super().__init__(seed)
+
+        self.trainer = None
+        self.epochs = None
+        self.resume = None
+        self.model = None
+        self.val_dl = None
+        self.train_dl = None
+        self.val_dataset = None
+        self.train_dataset = None
+        self.optim = None
+
         if train_kwargs is None:
             train_kwargs = dict()
         if dl_kwargs is None:
             dl_kwargs = dict()
+
         dl_kwargs = {**self.default_dl_kwargs, **dl_kwargs}
         train_kwargs = {**self.default_train_kwargs, **train_kwargs}
 
@@ -57,32 +70,35 @@ class TrainingExperiment(Experiment):
         params['dl_kwargs'] = dl_kwargs
         params['train_kwargs'] = train_kwargs
         self.add_params(**params)
-        # Save params
 
-        self.build_dataloader(dataset, **dl_kwargs)
-
-        self.build_model(model, pretrained, resume)
-
-        self.build_train(resume_optim=resume_optim, **train_kwargs)
+        self._build_dataloader(dataset, **dl_kwargs)
+        self._build_model(model, pretrained, resume)
+        self._build_train(resume_optim=resume_optim, **train_kwargs)
 
         self.path = path
         self.save_freq = save_freq
 
-    def run(self):
+    def setup(self):
         self.freeze()
         printc(f"Running {repr(self)}", color='YELLOW')
-        self.to_device()
-        self.build_logging(self.train_metrics, self.path)
-        self.run_epochs()
+        self._build_logging(self.train_metrics, self.path)
+        self.trainer = Trainer(self.model, self.path, self.optim, self.loss_func, self.save_freq, self.log)
 
-    def build_dataloader(self, dataset, **dl_kwargs):
+    @abstractmethod
+    def run(self):
+        pass
+
+    def wrapup(self):
+        pass
+
+    def _build_dataloader(self, dataset, **dl_kwargs):
         constructor = getattr(datasets, dataset)
         self.train_dataset = constructor(train=True)
         self.val_dataset = constructor(train=False)
         self.train_dl = DataLoader(self.train_dataset, shuffle=True, **dl_kwargs)
         self.val_dl = DataLoader(self.val_dataset, shuffle=False, **dl_kwargs)
 
-    def build_model(self, model, pretrained=True, resume=None):
+    def _build_model(self, model, pretrained=True, resume=None):
         if isinstance(model, str):
             if hasattr(models, model):
                 model = getattr(models, model)(pretrained=pretrained)
@@ -102,7 +118,7 @@ class TrainingExperiment(Experiment):
             previous = torch.load(self.resume)
             self.model.load_state_dict(previous['model_state_dict'])
 
-    def build_train(self, optim, epochs, resume_optim=False, **optim_kwargs):
+    def _build_train(self, optim, epochs, resume_optim=False, **optim_kwargs):
         default_optim_kwargs = {
             'SGD': {'momentum': 0.9, 'nesterov': True, 'lr': 1e-3},
             'Adam': {'momentum': 0.9, 'betas': (.9, .99), 'lr': 1e-4}
@@ -127,21 +143,13 @@ class TrainingExperiment(Experiment):
         # Assume classification experiment
         self.loss_func = nn.CrossEntropyLoss()
 
-    def to_device(self):
-        # Torch CUDA config
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        if not torch.cuda.is_available():
-            printc("GPU NOT AVAILABLE, USING CPU!", color="ORANGE")
-        self.model.to(self.device)
-        cudnn.benchmark = True  # For fast training.
-
     def run_epochs(self):
         since = time.time()
 
         time_logger = lambda _: self.log(timestamp=time.time() - since)
         epoch_logger = lambda epoch: self.log_epoch(epoch)
 
-        self.trainer.run_epochs(self.train_dl, self.val_dl, self.epochs, [time_logger, epoch_logger])
+        self.trainer.fit(self.train_dl, self.val_dl, self.epochs, [time_logger, epoch_logger])
 
     @property
     def train_metrics(self):
@@ -167,9 +175,9 @@ class Trainer:
         self.optim = optim
         self.log = log
         self.loss_func = loss_func
-        self.__to_device()
+        self._set_device()
 
-    def __to_device(self):
+    def _set_device(self):
         # Torch CUDA config
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         if not torch.cuda.is_available():
@@ -177,19 +185,21 @@ class Trainer:
         self.model.to(self.device)
         cudnn.benchmark = True  # For fast training.
 
-    def run_epochs(self, train_dl, valid_dl, epochs=25, callbacks: Optional[list[callable]] = None):
+    def fit(self, train_dl, valid_dl, epochs=25, callbacks: Optional[list[callable]] = None):
         epoch = 0
         best_acc = 0
 
         try:
             for epoch in range(1, epochs + 1):
-                train_metrics = self.__train_epoch(train_dl, epoch, epochs)
+                train_metrics = self._train_epoch(train_dl, epoch, epochs)
                 val_metrics = self.evaluate(valid_dl)
                 val_acc1 = val_metrics['val_acc1']
 
                 if val_acc1 > best_acc:
                     best_acc = val_acc1
-                    self.__checkpoint(epoch)
+                    self._checkpoint(epoch)
+                elif epoch % self.save_freq == 0:
+                    self._checkpoint(epoch)
 
                 # TODO Early stopping
                 # TODO ReduceLR on plateau?
@@ -205,7 +215,7 @@ class Trainer:
         except KeyboardInterrupt:
             printc(f"\nInterrupted at epoch {epoch}. Tearing Down", color='RED')
 
-    def __train_epoch(self, train_dl, epoch, epochs):
+    def _train_epoch(self, train_dl, epoch, epochs):
         total_loss = OnlineStats()
         acc1 = OnlineStats()
         acc5 = OnlineStats()
@@ -265,7 +275,7 @@ class Trainer:
             'val_acc5': acc5.mean,
         }
 
-    def __checkpoint(self, epoch):
+    def _checkpoint(self, epoch):
         checkpoint_path = self.path / 'checkpoints'
         checkpoint_path.mkdir(exist_ok=True, parents=True)
         torch.save({

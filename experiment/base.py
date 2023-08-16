@@ -103,27 +103,27 @@ class Experiment(ABC):
         self.uid = f"{time}-{nonce}-{self.digest}"
         return self.uid
 
-    def build_logging(self, metrics, path=None, csv=True, tensorboard=False):
+    def _build_logging(self, metrics, path=None, log_csv=True, log_tb=False):
         if path is None:
             self.path = self._get_path()
         printc(f"Logging results to {self.path}", color='MAGENTA')
         self.path.mkdir(exist_ok=True, parents=True)
         self.save_params()
 
-        self.log_csv = csv
-        self.log_tb = tensorboard
+        self.log_csv = log_csv
+        self.log_tb = log_tb
         self.log_epoch_n = 0
         if self.log_csv:
-            self.csvlogger = CSVLogger(self.path / 'logs.csv', metrics)
+            self.csv_logger = CSVLogger(self.path / 'logs.csv', metrics)
         if self.log_tb:
             tb_path = self.path / 'tbevents'
             tb_path.mkdir()
             from torch.utils.tensorboard import SummaryWriter
-            self.tblogger = SummaryWriter(log_dir=tb_path)
+            self.tb_logger = SummaryWriter(log_dir=tb_path)
 
     def log(self, **kwargs):
         if self.log_csv:
-            self.csvlogger.set(**kwargs)
+            self.csv_logger.set(**kwargs)
         if self.log_tb:
             for k, v in kwargs.items():
                 self.tb_writer.add_scalar(k, v, self.log_epoch_n)
@@ -133,20 +133,33 @@ class Experiment(ABC):
             self.log_epoch_n = epoch
         self.log_epoch_n += 1
         if self.log_csv:
-            self.csvlogger.set(epoch=epoch)
-            self.csvlogger.update()
-            self.csvlogger.set(epoch=self.log_epoch_n)
+            self.csv_logger.set(epoch=epoch)
+            self.csv_logger.update()
+            self.csv_logger.set(epoch=self.log_epoch_n)
 
-    def SIGINT_handler(self, signal, frame):
+    def SIGINT_handler(self, sig, frame):
         pass
 
-    def SIGQUIT_handler(self, signal, frame):
+    def SIGQUIT_handler(self, sig, frame):
         shutil.rmtree(self.path, ignore_errors=True)
+        self.wrapup()
         sys.exit(1)
+
+    def start(self):
+        self.setup()
+        self.run()
+
+    @abstractmethod
+    def setup(self):
+        pass
 
     @abstractmethod
     def run(self):
         pass
+
+    @abstractmethod
+    def wrapup(self):
+        self.csv_logger.close()
 
     def __repr__(self):
         return json.dumps(self.params, indent=4)
