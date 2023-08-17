@@ -3,7 +3,7 @@
 Implements pruning strategy that prunes as follows
 
 For a given tensor, sort by absolute value and
-keep only the _fraction_ with highest magnitudes
+keep only the _fraction_ with the highest magnitudes
 so that overall desired compression is achieved
 """
 

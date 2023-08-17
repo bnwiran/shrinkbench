@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torch.nn as nn
 from torchvision import models
@@ -17,15 +19,18 @@ class MobileNetSmallV3(nn.Module):
             nn.Linear(1024, 10)
         )
 
-        for param in self.features.parameters():
-            param.requires_grad = False
+        if pretrained:
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            dir_path = os.path.dirname(os.path.realpath(__file__))
+            state_dict = torch.load(dir_path + "/../checkpoints/mobilenet_v3_small_cifar10.pt",
+                                    map_location=device)
+            mode_state_dict = state_dict['model_state_dict']
+            self.load_state_dict(mode_state_dict)
 
         self.classifier[-1].is_classifier = True
 
     def forward(self, x):
-        with torch.no_grad():
-            x = self.features(x)
-            x = self.avgpool(x)
-            x = torch.flatten(x, 1)
-
+        x = self.features(x)
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
         return self.classifier(x)

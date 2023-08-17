@@ -180,8 +180,6 @@ class Trainer:
     def _set_device(self):
         # Torch CUDA config
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        if not torch.cuda.is_available():
-            printc("GPU NOT AVAILABLE, USING CPU!", color="ORANGE")
         self.model.to(self.device)
         cudnn.benchmark = True  # For fast training.
 

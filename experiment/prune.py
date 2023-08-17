@@ -46,7 +46,7 @@ class PruningExperiment(TrainingExperiment):
             self.pruning.apply()
             self.save_metrics()
 
-            if c > 1:
+            if c >= 1:
                 self.run_epochs()
 
     def save_metrics(self):

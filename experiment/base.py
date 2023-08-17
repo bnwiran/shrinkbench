@@ -89,7 +89,7 @@ class Experiment(ABC):
     def generate_uid(self):
         """Returns a time sortable UID
 
-        Computes timestamp and appends unique identifie
+        Computes timestamp and appends unique identifier
 
         Returns:
             str -- uid

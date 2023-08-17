@@ -75,7 +75,7 @@ class Pruning(ABC):
         else:
             return {module: get_params(module) for module in self.model.modules()}
 
-    def summary(self):
+    def summary(self) -> pd.DataFrame:
         rows = []
         for name, module in self.model.named_modules():
             for pname, param in module.named_parameters(recurse=False):
