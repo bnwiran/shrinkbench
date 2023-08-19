@@ -6,6 +6,8 @@ from typing import Optional
 
 import torch
 import torchvision.models
+from lightning.pytorch.callbacks import ModelCheckpoint
+import lightning.pytorch as pl
 from torch import nn
 from torch.nn import Module
 from torch.utils.data import DataLoader
@@ -82,7 +84,9 @@ class TrainingExperiment(Experiment):
         self.freeze()
         printc(f"Running {repr(self)}", color='YELLOW')
         self._build_logging(self.train_metrics, self.path)
-        self.trainer = Trainer(self.model, self.path, self.optim, self.loss_func, self.save_freq, self.log)
+
+        checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_acc1")
+        self.trainer = pl.Trainer(default_root_dir=self.path, max_epochs=self.epochs, callbacks=[checkpoint_callback])
 
     @abstractmethod
     def run(self):
@@ -149,7 +153,7 @@ class TrainingExperiment(Experiment):
         time_logger = lambda _: self.log(timestamp=time.time() - since)
         epoch_logger = lambda epoch: self.log_epoch(epoch)
 
-        self.trainer.fit(self.train_dl, self.val_dl, self.epochs, [time_logger, epoch_logger])
+        self.trainer.fit(model=self.model, train_dataloaders=self.train_dl, val_dataloaders=self.val_dl, )
 
     @property
     def train_metrics(self):
