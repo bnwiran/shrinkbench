@@ -43,10 +43,7 @@ class MobileNetSmallV3Light(pl.LightningModule):
 
     def training_step(self, batch, batch_idx) -> Tensor:
         x, y = batch
-        x = self.features(x)
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        logits = self.classifier(x)
+        logits = self(x)
 
         loss = nn.functional.cross_entropy(logits, y)
 
@@ -60,10 +57,7 @@ class MobileNetSmallV3Light(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        x = self.features(x)
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        logits = self.classifier(x)
+        logits = self(x)
 
         loss = F.cross_entropy(logits, y)
 
@@ -77,10 +71,7 @@ class MobileNetSmallV3Light(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         x, y = batch
-        x = self.features(x)
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        logits = self.classifier(x)
+        logits = self(x)
 
         loss = F.cross_entropy(logits, y)
 
@@ -91,6 +82,14 @@ class MobileNetSmallV3Light(pl.LightningModule):
         self.log("test_loss", loss, prog_bar=True)
 
         return loss
+
+    def forward(self, x):
+        x = self.features(x)
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        logits = self.classifier(x)
+
+        return logits
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=1e-3)
