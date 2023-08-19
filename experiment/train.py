@@ -5,7 +5,7 @@ from abc import abstractmethod
 import lightning.pytorch as pl
 import torch
 import torchvision.models
-from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from torch.utils.data import DataLoader
 
 from .base import Experiment
@@ -37,6 +37,7 @@ class TrainingExperiment(Experiment):
         # Default children kwargs
         super().__init__(seed)
 
+        self.checkpoint_callback = None
         self.trainer = None
         self.epochs = None
         self.resume = None
@@ -68,12 +69,13 @@ class TrainingExperiment(Experiment):
         printc(f"Running {repr(self)}", color='YELLOW')
         self._build_logging(self.train_metrics, self.path)
 
-        checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_acc1")
-        self.trainer = pl.Trainer(default_root_dir=self.path, max_epochs=self.epochs, callbacks=[checkpoint_callback])
-
     @abstractmethod
     def run(self):
-        pass
+        self.checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_acc1")
+        early_stop_callback = EarlyStopping(monitor="val_acc1", min_delta=0.00, patience=3, verbose=False,
+                                            mode="max")
+        self.trainer = pl.Trainer(default_root_dir=self.path, max_epochs=self.epochs,
+                                  callbacks=[self.checkpoint_callback, early_stop_callback])
 
     def wrapup(self):
         pass
@@ -109,7 +111,11 @@ class TrainingExperiment(Experiment):
         self.epochs = epochs
 
     def run_epochs(self):
-        self.trainer.fit(model=self.model, train_dataloaders=self.train_dl, val_dataloaders=self.val_dl)
+        best_model_path = self.checkpoint_callback.best_model_path
+        ckpt_path = None if best_model_path == '' else best_model_path
+        self.trainer.fit(model=self.model, train_dataloaders=self.train_dl, val_dataloaders=self.val_dl,
+                         ckpt_path=ckpt_path)
+        print(self.checkpoint_callback.best_model_path)
 
     @property
     def train_metrics(self):

@@ -39,8 +39,9 @@ class PruningExperiment(TrainingExperiment):
         super().setup()
 
     def run(self):
+        constructor = getattr(strategies, self.strategy)
         for c in self.compression:
-            constructor = getattr(strategies, self.strategy)
+            super().run()
             x, y = next(iter(self.train_dl))
             self.pruning = constructor(self.model, x, y, compression=c)
             self.pruning.apply()
