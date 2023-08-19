@@ -67,7 +67,7 @@ class PruningExperiment(TrainingExperiment):
         metrics['compression_ratio'] = size / size_nz
 
         x, _ = next(iter(self.val_dl))
-        x = x.to(self.trainer.device)
+        x = x.to(self.model.device)
 
         # FLOPS
         ops, ops_nz = flops(self.model, x)
@@ -76,7 +76,15 @@ class PruningExperiment(TrainingExperiment):
         metrics['theoretical_speedup'] = ops / ops_nz
 
         # Accuracy
-        val_metrics = self.trainer.evaluate(self.val_dl)
+        val_metrics = self.trainer.test(self.model, self.val_dl)[0]
+        val_metrics['val_loss'] = val_metrics['test_loss']
+        val_metrics['val_acc1'] = val_metrics['test_acc1']
+        val_metrics['val_acc5'] = val_metrics['test_acc5']
+
+        del val_metrics['test_loss']
+        del val_metrics['test_acc1']
+        del val_metrics['test_acc5']
+
         self.log(**val_metrics)
         self.log_epoch(0)
 
