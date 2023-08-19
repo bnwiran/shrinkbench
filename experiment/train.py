@@ -1,26 +1,18 @@
+import json
 import pathlib
-import sys
-import time
 from abc import abstractmethod
-from typing import Optional
 
+import lightning.pytorch as pl
 import torch
 import torchvision.models
 from lightning.pytorch.callbacks import ModelCheckpoint
-import lightning.pytorch as pl
-from torch import nn
-from torch.nn import Module
 from torch.utils.data import DataLoader
-from torch.backends import cudnn
-from tqdm import tqdm
-import json
 
 from .base import Experiment
 from .. import datasets
 from .. import models
-from ..metrics import correct
 from ..models.head import mark_classifier
-from ..util import printc, OnlineStats
+from ..util import printc
 
 
 class TrainingExperiment(Experiment):
@@ -28,11 +20,6 @@ class TrainingExperiment(Experiment):
                          'pin_memory': False,
                          'num_workers': 8
                          }
-
-    default_train_kwargs = {'optim': 'SGD',
-                            'epochs': 30,
-                            'lr': 1e-3,
-                            }
 
     def __init__(self,
                  dataset,
@@ -60,17 +47,13 @@ class TrainingExperiment(Experiment):
         self.train_dataset = None
         self.optim = None
 
-        if train_kwargs is None:
-            train_kwargs = dict()
         if dl_kwargs is None:
             dl_kwargs = dict()
 
         dl_kwargs = {**self.default_dl_kwargs, **dl_kwargs}
-        train_kwargs = {**self.default_train_kwargs, **train_kwargs}
 
         params = locals()
         params['dl_kwargs'] = dl_kwargs
-        params['train_kwargs'] = train_kwargs
         self.add_params(**params)
 
         self._build_dataloader(dataset, **dl_kwargs)
@@ -122,38 +105,11 @@ class TrainingExperiment(Experiment):
             previous = torch.load(self.resume)
             self.model.load_state_dict(previous['model_state_dict'])
 
-    def _build_train(self, optim, epochs, resume_optim=False, **optim_kwargs):
-        default_optim_kwargs = {
-            'SGD': {'momentum': 0.9, 'nesterov': True, 'lr': 1e-3},
-            'Adam': {'momentum': 0.9, 'betas': (.9, .99), 'lr': 1e-4}
-        }
-
+    def _build_train(self, epochs, resume_optim=False):
         self.epochs = epochs
 
-        # Optim
-        if isinstance(optim, str):
-            constructor = getattr(torch.optim, optim)
-            if optim in default_optim_kwargs:
-                optim_kwargs = {**default_optim_kwargs[optim], **optim_kwargs}
-            optim = constructor(self.model.parameters(), **optim_kwargs)
-
-        self.optim = optim
-
-        if resume_optim:
-            assert hasattr(self, "resume"), "Resume must be given for resume_optim"
-            previous = torch.load(self.resume)
-            self.optim.load_state_dict(previous['optim_state_dict'])
-
-        # Assume classification experiment
-        self.loss_func = nn.CrossEntropyLoss()
-
     def run_epochs(self):
-        since = time.time()
-
-        time_logger = lambda _: self.log(timestamp=time.time() - since)
-        epoch_logger = lambda epoch: self.log_epoch(epoch)
-
-        self.trainer.fit(model=self.model, train_dataloaders=self.train_dl, val_dataloaders=self.val_dl, )
+        self.trainer.fit(model=self.model, train_dataloaders=self.train_dl, val_dataloaders=self.val_dl)
 
     @property
     def train_metrics(self):
@@ -168,121 +124,3 @@ class TrainingExperiment(Experiment):
 
         assert isinstance(self.params['model'], str), f"\nUnexpected model inputs: {self.params['model']}"
         return json.dumps(self.params, indent=4)
-
-
-class Trainer:
-    def __init__(self, model: Module, path: pathlib.Path, optim, loss_func, save_freq: int = 10,
-                 log: callable = None) -> None:
-        self.model = model
-        self.path = path
-        self.save_freq = save_freq
-        self.optim = optim
-        self.log = log
-        self.loss_func = loss_func
-        self._set_device()
-
-    def _set_device(self):
-        # Torch CUDA config
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model.to(self.device)
-        cudnn.benchmark = True  # For fast training.
-
-    def fit(self, train_dl, valid_dl, epochs=25, callbacks: Optional[list[callable]] = None):
-        epoch = 0
-        best_acc = 0
-
-        try:
-            for epoch in range(1, epochs + 1):
-                train_metrics = self._train_epoch(train_dl, epoch, epochs)
-                val_metrics = self.evaluate(valid_dl)
-                val_acc1 = val_metrics['val_acc1']
-
-                if val_acc1 > best_acc:
-                    best_acc = val_acc1
-                    self._checkpoint(epoch)
-
-                if epoch % self.save_freq == 0:
-                    self._checkpoint(epoch)
-
-                # TODO Early stopping
-                # TODO ReduceLR on plateau?
-
-                if self.log is not None:
-                    self.log(**train_metrics)
-                    self.log(**val_metrics)
-
-                if callbacks is not None:
-                    for callback in callbacks:
-                        callback(epoch)
-
-        except KeyboardInterrupt:
-            printc(f"\nInterrupted at epoch {epoch}. Tearing Down", color='RED')
-
-    def _train_epoch(self, train_dl, epoch, epochs):
-        total_loss = OnlineStats()
-        acc1 = OnlineStats()
-        acc5 = OnlineStats()
-
-        epoch_iter = tqdm(train_dl, file=sys.stdout, ascii=' >=')
-        epoch_iter.set_description(f"TRAIN Epoch {epoch}/{epochs}")
-
-        self.model.train()
-        with torch.set_grad_enabled(True):
-            for i, (x, y) in enumerate(epoch_iter, start=1):
-                x, y = x.to(self.device), y.to(self.device)
-                yhat = self.model(x)
-                loss = self.loss_func(yhat, y)
-                loss.backward()
-
-                self.optim.step()
-                self.optim.zero_grad()
-
-                c1, c5 = correct(yhat, y, (1, 5))
-                total_loss.add(loss.item() / train_dl.batch_size)
-                acc1.add(c1 / train_dl.batch_size)
-                acc5.add(c5 / train_dl.batch_size)
-
-                epoch_iter.set_postfix(loss=total_loss.mean, top1=acc1.mean, top5=acc5.mean)
-
-        return {
-            'train_loss': total_loss.mean,
-            'train_acc1': acc1.mean,
-            'train_acc5': acc5.mean,
-        }
-
-    def evaluate(self, valid_dl):
-        total_loss = OnlineStats()
-        acc1 = OnlineStats()
-        acc5 = OnlineStats()
-
-        epoch_iter = tqdm(valid_dl, file=sys.stdout, ascii=' >=')
-        epoch_iter.set_description("VAL")
-
-        self.model.eval()
-        with torch.no_grad():
-            for i, (x, y) in enumerate(epoch_iter, start=1):
-                x, y = x.to(self.device), y.to(self.device)
-                yhat = self.model(x)
-                loss = self.loss_func(yhat, y)
-
-                c1, c5 = correct(yhat, y, (1, 5))
-                total_loss.add(loss.item() / valid_dl.batch_size)
-                acc1.add(c1 / valid_dl.batch_size)
-                acc5.add(c5 / valid_dl.batch_size)
-
-                epoch_iter.set_postfix(loss=total_loss.mean, top1=acc1.mean, top5=acc5.mean)
-
-        return {
-            'val_loss': total_loss.mean,
-            'val_acc1': acc1.mean,
-            'val_acc5': acc5.mean,
-        }
-
-    def _checkpoint(self, epoch):
-        checkpoint_path = self.path / 'checkpoints'
-        checkpoint_path.mkdir(exist_ok=True, parents=True)
-        model_name = checkpoint_path / f'checkpoint-{epoch}.pt'
-        torch.save({
-            'model_state_dict': self.model.state_dict(),
-            'optim_state_dict': self.optim.state_dict()
-        }, model_name)
