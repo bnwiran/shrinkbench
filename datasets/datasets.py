@@ -1,4 +1,3 @@
-import pathlib
 import os
 
 from torchvision import transforms, datasets
@@ -105,9 +104,9 @@ def CIFAR100(train=True, path=None):
     mean, std = [0.507, 0.487, 0.441], [0.267, 0.256, 0.276]
     normalize = transforms.Normalize(mean=mean, std=std)
     if train:
-        preproc = [transforms.RandomHorizontalFlip(), transforms.RandomCrop(32, 4)]
+        preproc = [transforms.RandomResizedCrop(224), transforms.RandomHorizontalFlip()]
     else:
-        preproc = []
+        preproc = [transforms.Resize(256), transforms.CenterCrop(224)]
     dataset = dataset_builder('CIFAR100', train, normalize, preproc, path)
     dataset.shape = (3, 32, 32)
     dataset.val_size = 0.2
