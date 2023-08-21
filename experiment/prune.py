@@ -87,9 +87,6 @@ class PruningExperiment(TrainingExperiment):
         del val_metrics['test_acc1']
         del val_metrics['test_acc5']
 
-        self.log(**val_metrics)
-        self.log_epoch(0)
-
         metrics['loss'] = val_metrics['val_loss']
         metrics['val_acc1'] = val_metrics['val_acc1']
         metrics['val_acc5'] = val_metrics['val_acc5']

@@ -1,6 +1,6 @@
 import json
 import pathlib
-import string
+
 import pandas as pd
 
 COLUMNS = ['dataset', 'model',
@@ -21,7 +21,6 @@ def df_from_results(results_path, glob='*'):
             params = eval(json.load(f)['params'])
         with open(exp / 'metrics.json', 'r') as f:
             metrics = json.load(f)
-        logs = pd.read_csv(exp / 'logs.csv')
 
         row = [
             # Params
@@ -40,15 +39,15 @@ def df_from_results(results_path, glob='*'):
             metrics['val_acc1'],
             metrics['val_acc5'],
             # Post Accs
-            logs['val_acc1'].max(),
-            logs['val_acc5'].max(),
+            # logs['val_acc1'].max(),
+            # logs['val_acc5'].max(),
             # Other params
             params['seed'],
             params['dl_kwargs']['batch_size'],
             params['train_kwargs']['epochs'],
             params['train_kwargs']['optim'],
             params['train_kwargs']['lr'],
-            len(logs), #Completed epochs
+            # len(logs), #Completed epochs
             str(exp),
         ]
         results.append(row)

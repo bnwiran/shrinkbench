@@ -75,7 +75,7 @@ class TrainingExperiment(Experiment):
     def setup(self):
         self.freeze()
         printc(f"Running {repr(self)}", color='YELLOW')
-        self._build_logging(self.train_metrics, self.path)
+        self._build_logging()
 
     @abstractmethod
     def run(self):

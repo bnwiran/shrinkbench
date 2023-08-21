@@ -80,6 +80,7 @@ def MNIST(train=True, path=None):
     normalize = transforms.Normalize(mean=(mean,), std=(std,))
     dataset = dataset_builder('MNIST', train, normalize, [], path)
     dataset.shape = (1, 28, 28)
+    dataset.val_size = 0.2
     return dataset
 
 
