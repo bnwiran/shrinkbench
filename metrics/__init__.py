@@ -33,8 +33,6 @@ dtype2bits = {
     torch.bool: 1,
 }
 
-
 from .size import model_size
-from .accuracy import accuracy, correct
 from .memory import memory_size
 from .flops import flops

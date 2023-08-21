@@ -127,7 +127,6 @@ class TrainingExperiment(Experiment):
         ckpt_path = None if best_model_path == '' else best_model_path
         self.trainer.fit(model=self.model, train_dataloaders=self.train_dl, val_dataloaders=self.val_dl,
                          ckpt_path=ckpt_path)
-        print(self.checkpoint_callback.best_model_path)
 
     @property
     def train_metrics(self):
