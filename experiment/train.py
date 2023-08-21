@@ -3,10 +3,12 @@ import pathlib
 from abc import abstractmethod
 
 import lightning.pytorch as pl
+import numpy as np
 import torch
 import torchvision.models
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
-from torch.utils.data import DataLoader
+from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader, Subset
 
 from .base import Experiment
 from .. import datasets
@@ -16,26 +18,32 @@ from ..util import printc
 
 
 class TrainingExperiment(Experiment):
-    default_dl_kwargs = {'batch_size': 128,
-                         'pin_memory': False,
-                         'num_workers': 8
-                         }
+    default_dl_kwargs = {
+        'batch_size': 128,
+        'pin_memory': False,
+        'num_workers': 8
+    }
+    default_model_kwargs = {
+        'pretrained': False
+    }
 
     def __init__(self,
+                 name: str,
                  dataset,
                  model,
+                 resume_exp: bool = False,
                  seed=42,
                  path=None,
+                 model_kwargs: dict = None,
                  dl_kwargs: dict = None,
                  train_kwargs: dict = None,
                  debug=False,
-                 pretrained=False,
                  resume=None,
                  resume_optim=False,
                  save_freq=10):
 
         # Default children kwargs
-        super().__init__(seed)
+        super().__init__(name, path, resume_exp, seed)
 
         self.checkpoint_callback = None
         self.trainer = None
@@ -44,24 +52,24 @@ class TrainingExperiment(Experiment):
         self.model = None
         self.val_dl = None
         self.train_dl = None
-        self.val_dataset = None
-        self.train_dataset = None
         self.optim = None
+
+        if model_kwargs is None:
+            model_kwargs = dict()
 
         if dl_kwargs is None:
             dl_kwargs = dict()
 
         dl_kwargs = {**self.default_dl_kwargs, **dl_kwargs}
+        model_kwargs = {**self.default_model_kwargs, **model_kwargs}
 
         params = locals()
         params['dl_kwargs'] = dl_kwargs
+        params['model_kwargs'] = model_kwargs
         self.add_params(**params)
-
-        self._build_dataloader(dataset, **dl_kwargs)
-        self._build_model(model, pretrained, resume)
+        self._build_dataloaders(dataset, **dl_kwargs)
+        self._build_model(model, resume, **model_kwargs)
         self._build_train(resume_optim=resume_optim, **train_kwargs)
-
-        self.path = path
         self.save_freq = save_freq
 
     def setup(self):
@@ -80,21 +88,25 @@ class TrainingExperiment(Experiment):
     def wrapup(self):
         pass
 
-    def _build_dataloader(self, dataset, **dl_kwargs):
+    def _build_dataloaders(self, dataset, **dl_kwargs):
         constructor = getattr(datasets, dataset)
-        self.train_dataset = constructor(train=True)
-        self.val_dataset = constructor(train=False)
-        self.train_dl = DataLoader(self.train_dataset, shuffle=True, **dl_kwargs)
-        self.val_dl = DataLoader(self.val_dataset, shuffle=False, **dl_kwargs)
+        dataset = constructor(train=True)
+        targets = dataset.targets
+        train_idx, val_idx = train_test_split(np.arange(len(targets)), test_size=dataset.val_size, random_state=42,
+                                              shuffle=True, stratify=targets)
+        train_dataset = Subset(dataset, train_idx)
+        val_dataset = Subset(dataset, val_idx)
+        self.train_dl = DataLoader(train_dataset, shuffle=True, **dl_kwargs)
+        self.val_dl = DataLoader(val_dataset, shuffle=False, **dl_kwargs)
 
-    def _build_model(self, model, pretrained=True, resume=None):
+    def _build_model(self, model, resume=None, **model_kwargs):
         if isinstance(model, str):
             if hasattr(models, model):
-                model = getattr(models, model)(pretrained=pretrained)
+                model = getattr(models, model)(**model_kwargs)
 
             elif hasattr(torchvision.models, model):
                 # https://pytorch.org/docs/stable/torchvision/models.html
-                model = getattr(torchvision.models, model)(pretrained=pretrained)
+                model = getattr(torchvision.models, model)(**model_kwargs)
                 mark_classifier(model)  # add is_classifier attribute
             else:
                 raise ValueError(f"Model {model} not available in custom models or torchvision models")

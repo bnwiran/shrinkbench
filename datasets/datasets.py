@@ -95,6 +95,7 @@ def CIFAR10(train=True, path=None):
         preproc = [transforms.Resize(256), transforms.CenterCrop(224)]
     dataset = dataset_builder('CIFAR10', train, normalize, preproc, path)
     dataset.shape = (3, 32, 32)
+    dataset.val_size = 0.2
     return dataset
 
 
@@ -109,6 +110,7 @@ def CIFAR100(train=True, path=None):
         preproc = []
     dataset = dataset_builder('CIFAR100', train, normalize, preproc, path)
     dataset.shape = (3, 32, 32)
+    dataset.val_size = 0.2
     return dataset
 
 
@@ -128,6 +130,7 @@ def ImageNet(train=True, path=None):
         preproc = [transforms.Resize(256), transforms.CenterCrop(224)]
     dataset = dataset_builder('ImageNet', train, normalize, preproc, path)
     dataset.shape = (3, 224, 224)
+    dataset.val_size = 0.2
     return dataset
 
 
@@ -148,4 +151,5 @@ def Places365(train=True, path=None):
         preproc = [transforms.Resize(256), transforms.CenterCrop(224)]
     dataset = dataset_builder('Places365', train, normalize, preproc, path)
     dataset.shape = (3, 224, 224)
+    dataset.val_size = 0.2
     return dataset

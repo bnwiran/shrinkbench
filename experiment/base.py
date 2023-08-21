@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import datetime
 import hashlib
 import json
-import pathlib
+from pathlib import Path
 import random
 import shutil
 import signal
@@ -20,7 +20,10 @@ import platform
 
 class Experiment(ABC):
 
-    def __init__(self, seed=42):
+    def __init__(self, name: str, path: str, resume: bool = False, seed=42) -> None:
+        assert name and name.strip(), "Experiment must have a name"
+
+        self.path = self._create_experiment_dir(path, name, resume)
         self._params = {"experiment": self.__class__.__name__, 'params': {}}
         self.seed = seed
         self.frozen = False
@@ -53,15 +56,17 @@ class Experiment(ABC):
         with open(path, 'w') as f:
             json.dump(self.serializable_params(), f, indent=4)
 
-    def _get_path(self):
-        if hasattr(self, "rootdir"):
-            parent = pathlib.Path(self.rootdir)
-        else:
-            parent = pathlib.Path('results')
-        if self._params.get('debug', False):
-            parent /= 'tmp'
-        parent.mkdir(parents=True, exist_ok=True)
-        return parent / self.uid
+    def _create_experiment_dir(self, path: str, name: str, resume: bool = False) -> Path:
+        if path is None:
+            path = '.'
+
+        abs_path = Path(path + "/" + name)
+        if abs_path.is_dir() and not resume:
+            raise Exception(f"Cannot create new experiment with name {name} on {path}, it's already exists")
+
+        abs_path.mkdir(parents=True, exist_ok=True)
+
+        return abs_path
 
     @property
     def digest(self):
@@ -104,10 +109,7 @@ class Experiment(ABC):
         return self.uid
 
     def _build_logging(self, metrics, path=None, log_csv=True, log_tb=False):
-        if path is None:
-            self.path = self._get_path()
         printc(f"Logging results to {self.path}", color='MAGENTA')
-        self.path.mkdir(exist_ok=True, parents=True)
         self.save_params()
 
         self.log_csv = log_csv

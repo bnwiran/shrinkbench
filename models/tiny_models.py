@@ -10,11 +10,11 @@ from torchvision import models
 
 
 class MobileNetSmallV3Light(pl.LightningModule):
-    def __init__(self, pretrained=False):
+    def __init__(self, num_classes: int, pretrained=False):
         super().__init__()
+        assert num_classes > 1, "Number of classes must be greater than" + str(num_classes)
         base_model = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
 
-        num_classes = 10
         self.features = base_model.features
         self.avgpool = base_model.avgpool
         self.classifier = nn.Sequential(
@@ -34,6 +34,9 @@ class MobileNetSmallV3Light(pl.LightningModule):
 
         self.classifier[-1].is_classifier = True
 
+        self._create_metrics(num_classes)
+
+    def _create_metrics(self, num_classes):
         self.train_acc1 = MulticlassAccuracy(num_classes=num_classes)
         self.train_acc5 = MulticlassAccuracy(num_classes=num_classes, top_k=5)
         self.val_acc1 = MulticlassAccuracy(num_classes=num_classes)

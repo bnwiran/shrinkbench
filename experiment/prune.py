@@ -11,28 +11,29 @@ from ..util import printc
 class PruningExperiment(TrainingExperiment):
 
     def __init__(self,
+                 name: str,
                  dataset,
                  model,
                  strategy,
                  compression: Union[list[int], int],
+                 resume_exp: bool = False,
                  seed=42,
                  path=None,
+                 model_kwargs=None,
                  dl_kwargs=None,
                  train_kwargs=None,
                  debug=False,
-                 pretrained=True,
                  resume=None,
                  resume_optim=False,
-                 save_freq=10):
+                 save_freq=10) -> None:
 
-        super().__init__(dataset, model, seed, path, dl_kwargs, train_kwargs, debug, pretrained, resume, resume_optim,
-                         save_freq)
+        super().__init__(name, dataset, model, resume_exp, seed, path, model_kwargs, dl_kwargs, train_kwargs, debug,
+                         resume, resume_optim, save_freq)
 
         self.pruning = None
         self.strategy = strategy
         self.compression = [compression] if isinstance(compression, int) else compression
         self.add_params(strategy=strategy, compression=compression)
-        self.path = path
         self.save_freq = save_freq
 
     def setup(self):
