@@ -7,4 +7,4 @@ from .cifar_resnet import (resnet20,
 from .cifar_vgg import vgg_bn_drop, vgg_bn_drop_100
 from .head import replace_head
 from .mnistnet import MnistNet
-from .tiny_models import MobileNetSmallV3, ShuffleNetV2
+from .tiny_models import MobileNetSmallV3, ShuffleNetV2, SqueezeNetV1

@@ -34,7 +34,7 @@ def dataset_path(dataset, path=None):
         if 'DATAPATH' in os.environ:
             path = os.environ['DATAPATH'] + '/' + dataset
         else:
-            raise ValueError(f"No path specified. A path must be provided, \n \
+            raise ValueError(f"No path specified for dataset {dataset}. A path must be provided, \n \
                            or the folder must be listed in your DATAPATH")
 
     return path
