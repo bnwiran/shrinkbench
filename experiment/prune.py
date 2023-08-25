@@ -1,11 +1,10 @@
 import json
+import logging
 from typing import Union
 
 from .train import TrainingExperiment
-
 from .. import strategies
 from ..metrics import model_size, flops
-from ..util import printc
 
 
 class PruningExperiment(TrainingExperiment):
@@ -41,28 +40,32 @@ class PruningExperiment(TrainingExperiment):
 
     def run(self):
         constructor = getattr(strategies, self.strategy)
+        # self._save_metrics(0)
+
         for c in self.compression:
-            super().run()
+            logging.info(f'Running pruning experiment with compression {c}')
             x, y = next(iter(self.train_dl))
+
             self.pruning = constructor(self.model, x, y, compression=c)
+            super().run()
             self.pruning.apply()
-            self.save_metrics()
+            self.run_epochs()
+            self._save_metrics(c)
 
-            if c >= 1:
-                self.run_epochs()
+    def _save_metrics(self, compression):
+        metrics = self._model_metrics()
+        self._log_csv(metrics)
 
-    def save_metrics(self):
-        metrics = self.pruning_metrics()
-        with open(self.path / 'metrics.json', 'w') as f:
-            json.dump(metrics, f, indent=4)
-        printc(json.dumps(metrics, indent=4), color='GRASS')
-        summary = self.pruning.summary()
-        summary_path = self.path / 'masks_summary.csv'
-        summary.to_csv(summary_path)
+        if compression > 0:
+            with open(self.path / f'metrics-{compression}.json', 'w') as f:
+                json.dump(metrics, f, indent=4)
 
-    def pruning_metrics(self):
+            summary = self.pruning.summary()
+            summary_path = self.path / f'masks_summary_{compression}.csv'
+            summary.to_csv(summary_path)
+
+    def _model_metrics(self):
         metrics = {}
-        # Model Size
         size, size_nz = model_size(self.model)
         metrics['size'] = size
         metrics['size_nz'] = size_nz
@@ -71,24 +74,29 @@ class PruningExperiment(TrainingExperiment):
         x, _ = next(iter(self.val_dl))
         x = x.to(self.model.device)
 
-        # FLOPS
         ops, ops_nz = flops(self.model, x)
         metrics['flops'] = ops
         metrics['flops_nz'] = ops_nz
         metrics['theoretical_speedup'] = ops / ops_nz
 
-        # Accuracy
         val_metrics = self.trainer.test(self.model, self.val_dl)[0]
-        val_metrics['val_loss'] = val_metrics['test_loss']
-        val_metrics['val_acc1'] = val_metrics['test_acc1']
-        val_metrics['val_acc5'] = val_metrics['test_acc5']
-
-        del val_metrics['test_loss']
-        del val_metrics['test_acc1']
-        del val_metrics['test_acc5']
-
-        metrics['loss'] = val_metrics['val_loss']
-        metrics['val_acc1'] = val_metrics['val_acc1']
-        metrics['val_acc5'] = val_metrics['val_acc5']
+        metrics['loss'] = val_metrics['test_loss']
+        metrics['val_acc1'] = val_metrics['test_acc1']
+        metrics['val_acc5'] = val_metrics['test_acc5']
 
         return metrics
+
+    def _log_csv(self, metrics: dict) -> None:
+        summary_path = self.path / f'metrics_summary.csv'
+        header = ['size', 'size_nz', 'compression_ratio', 'flops', 'flops_nz', 'theoretical_speedup', 'loss',
+                  'val_acc1', 'val_acc5']
+
+        if not summary_path.exists():
+            with open(summary_path, 'w') as f:
+                f.write(','.join(header))
+                f.write('\n')
+
+        with open(summary_path, 'a') as f:
+            values = [str(metrics[key]) for key in header]
+            f.write(','.join(values))
+            f.write('\n')

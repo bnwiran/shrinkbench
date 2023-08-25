@@ -1,5 +1,7 @@
 import warnings
 import torch.nn as nn
+from torch import Tensor
+
 from .abstract import Pruning
 from .utils import fraction_to_keep
 from .modules import MaskedModule
@@ -7,7 +9,7 @@ from .modules import MaskedModule
 
 class VisionPruning(Pruning):
 
-    def __init__(self, model, inputs=None, outputs=None, compression=1):
+    def __init__(self, model: nn.Module, inputs: Tensor = None, outputs: Tensor = None, compression=1):
         super().__init__(model, inputs, outputs, compression=compression)
         self.prunable = self.prunable_modules()
         self.fraction = fraction_to_keep(self.compression, self.model, self.prunable)

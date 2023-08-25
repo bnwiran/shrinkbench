@@ -1,4 +1,5 @@
 import json
+import logging
 import platform
 import random
 import shutil
@@ -10,8 +11,6 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from ..util import printc
-
 
 class Experiment(ABC):
 
@@ -19,6 +18,7 @@ class Experiment(ABC):
         assert name and name.strip(), "Experiment must have a name"
 
         self.path = self._create_experiment_dir(path, name, resume)
+        self._setup_logging(self.path)
         self._params = {"experiment": self.__class__.__name__, 'params': {}}
         self.seed = seed
         self.frozen = False
@@ -78,10 +78,6 @@ class Experiment(ABC):
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
 
-    def _build_logging(self):
-        printc(f"Logging results to {self.path}", color='MAGENTA')
-        self.save_params()
-
     def SIGINT_handler(self, sig, frame):
         pass
 
@@ -108,3 +104,8 @@ class Experiment(ABC):
 
     def __repr__(self):
         return json.dumps(self.params, indent=4)
+
+    def _setup_logging(self, path):
+        logging.basicConfig(filename=path / 'experiment.log',
+                            level=logging.DEBUG,
+                            format='%(asctime)s:%(levelname)s:%(name)s:%(message)s')

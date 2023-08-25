@@ -1,6 +1,6 @@
 import json
+import logging
 import pathlib
-from abc import abstractmethod
 
 import lightning.pytorch as pl
 import numpy as np
@@ -14,7 +14,6 @@ from .base import Experiment
 from .. import datasets
 from .. import models
 from ..models.head import mark_classifier
-from ..util import printc
 
 
 class TrainingExperiment(Experiment):
@@ -73,11 +72,10 @@ class TrainingExperiment(Experiment):
         self.save_freq = save_freq
 
     def setup(self):
+        logging.info("Setting up the experiment")
         self.freeze()
-        printc(f"Running {repr(self)}", color='YELLOW')
-        self._build_logging()
+        self.save_params()
 
-    @abstractmethod
     def run(self):
         self.checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_acc1")
         early_stop_callback = EarlyStopping(monitor="val_acc1", min_delta=0.00, patience=3, verbose=False,
@@ -127,13 +125,6 @@ class TrainingExperiment(Experiment):
         ckpt_path = None if best_model_path == '' else best_model_path
         self.trainer.fit(model=self.model, train_dataloaders=self.train_dl, val_dataloaders=self.val_dl,
                          ckpt_path=ckpt_path)
-
-    @property
-    def train_metrics(self):
-        return ['epoch', 'timestamp',
-                'train_loss', 'train_acc1', 'train_acc5',
-                'val_loss', 'val_acc1', 'val_acc5',
-                ]
 
     def __repr__(self):
         if not isinstance(self.params['model'], str) and isinstance(self.params['model'], torch.nn.Module):

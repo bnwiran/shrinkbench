@@ -3,6 +3,7 @@ from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
+from torch import nn, Tensor
 
 from .mask import mask_module
 from .modules import MaskedModule
@@ -10,11 +11,10 @@ from .utils import get_params
 
 
 class Pruning(ABC):
-
     """Base class for Pruning operations
     """
 
-    def __init__(self, model, inputs=None, outputs=None, **pruning_params):
+    def __init__(self, model: nn.Module, inputs: Tensor = None, outputs: Tensor = None, **pruning_params):
         """Construct Pruning class
 
         Passed params are set as attributes for convienence and
@@ -22,8 +22,8 @@ class Pruning(ABC):
 
         Arguments:
             model {torch.nn.Module} -- Model for which to compute masks
-            inputs {torch.nn.Tensor} -- Sample inputs to estimate activation &| gradients
-            outputs {torch.nn.Tensor} -- Sample outputs to estimate activation &| gradients
+            inputs {torch.Tensor} -- Sample inputs to estimate activation &| gradients
+            outputs {torch.Tensor} -- Sample outputs to estimate activation &| gradients
         Keyword Arguments:
             **pruning_params {dict} -- [description]
         """
@@ -80,7 +80,7 @@ class Pruning(ABC):
         for name, module in self.model.named_modules():
             for pname, param in module.named_parameters(recurse=False):
                 if isinstance(module, MaskedModule):
-                    compression = 1/getattr(module, pname+'_mask').detach().cpu().numpy().mean()
+                    compression = 1 / getattr(module, pname + '_mask').detach().cpu().numpy().mean()
                 else:
                     compression = 1
                 shape = param.detach().cpu().numpy().shape
