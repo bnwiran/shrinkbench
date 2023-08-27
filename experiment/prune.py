@@ -87,6 +87,11 @@ class PruningExperiment(Experiment):
 
     def run(self):
         constructor = getattr(strategies, self.strategy)
+        self.checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_acc1", mode='max')
+        early_stop_callback = EarlyStopping(monitor="val_acc1", min_delta=0.00, patience=3, verbose=False,
+                                            mode="max")
+        self.trainer = pl.Trainer(default_root_dir=self.path, max_epochs=self.epochs,
+                                  callbacks=[self.checkpoint_callback, early_stop_callback])
 
         for c in self.compression:
             logging.info(f'Running pruning experiment with compression {c}')
@@ -94,12 +99,6 @@ class PruningExperiment(Experiment):
 
             self.pruning = constructor(self.model, x, y, compression=c)
             self.pruning.apply()
-            self.checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_acc1", mode='max')
-            early_stop_callback = EarlyStopping(monitor="val_acc1", min_delta=0.00, patience=3, verbose=False,
-                                                mode="max")
-            self.trainer = pl.Trainer(default_root_dir=self.path, max_epochs=self.epochs,
-                                      callbacks=[self.checkpoint_callback, early_stop_callback])
-
             self._fit()
             self._save_metrics(c)
 
