@@ -28,7 +28,7 @@ class PruningExperiment(Experiment):
         'num_workers': 8
     }
     default_model_kwargs = {
-        'pretrained': False
+        'pretrained': None
     }
 
     def __init__(self,
@@ -94,18 +94,19 @@ class PruningExperiment(Experiment):
 
             self.pruning = constructor(self.model, x, y, compression=c)
             self.pruning.apply()
-            self.checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_acc1")
+            self.checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_acc1", mode='max')
             early_stop_callback = EarlyStopping(monitor="val_acc1", min_delta=0.00, patience=3, verbose=False,
                                                 mode="max")
             self.trainer = pl.Trainer(default_root_dir=self.path, max_epochs=self.epochs,
                                       callbacks=[self.checkpoint_callback, early_stop_callback])
-            self._run_epochs()
+
+            self._fit()
             self._save_metrics(c)
 
     def wrapup(self):
         pass
 
-    def _run_epochs(self):
+    def _fit(self):
         self.trainer.fit(model=self.model, train_dataloaders=self.train_dl, val_dataloaders=self.val_dl,
                          ckpt_path=self.best_model_path)
 
@@ -172,10 +173,10 @@ class PruningExperiment(Experiment):
         metrics['flops_nz'] = ops_nz
         metrics['theoretical_speedup'] = ops / ops_nz
 
-        val_metrics = self.trainer.test(self.model, self.val_dl)[0]
-        metrics['loss'] = val_metrics['test_loss']
-        metrics['val_acc1'] = val_metrics['test_acc1']
-        metrics['val_acc5'] = val_metrics['test_acc5']
+        val_metrics = self.trainer.validate(self.model, self.val_dl)[0]
+        metrics['loss'] = val_metrics['val_loss']
+        metrics['val_acc1'] = val_metrics['val_acc1']
+        metrics['val_acc5'] = val_metrics['val_acc5']
 
         return metrics
 

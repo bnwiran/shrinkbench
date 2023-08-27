@@ -14,8 +14,8 @@ class MnistNet(pl.LightningModule):
     """Small network designed for Mnist debugging
     """
 
-    def __init__(self, pretrained=False) -> None:
-        assert not pretrained, f"{self.__class__.__name__} does not support pretrained weights"
+    def __init__(self, pretrained: str = None) -> None:
+        assert pretrained is None, f"{self.__class__.__name__} does not support pretrained weights"
         super().__init__()
         self.conv1 = nn.Conv2d(1, 20, 5, 1)
         self.conv2 = nn.Conv2d(20, 50, 5, 1)
@@ -87,8 +87,8 @@ class MnistNet(pl.LightningModule):
 
 
 class LeNet(nn.Module):
-    def __init__(self, pretrained=False):
-        assert not pretrained, f"{self.__class__.__name__} does not support pretrained weights"
+    def __init__(self, pretrained: str = None):
+        assert pretrained is None, f"{self.__class__.__name__} does not support pretrained weights"
         super(LeNet, self).__init__()
         # 1 input image channel, 6 output channels, 3x3 square conv kernel
         self.conv1 = nn.Conv2d(1, 6, 3)

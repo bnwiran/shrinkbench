@@ -10,10 +10,14 @@ from torchvision import models
 
 
 class MobileNetSmallV3(pl.LightningModule):
-    def __init__(self, num_classes: int, pretrained=False):
+    def __init__(self, num_classes: int, pretrained: str = None) -> None:
         super().__init__()
         assert num_classes > 1, "Number of classes must be greater than" + str(num_classes)
-        base_model = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
+
+        if pretrained is not None and pretrained.lower() == 'imagenet':
+            base_model = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
+        else:
+            base_model = models.mobilenet_v3_small()
 
         self.features = base_model.features
         self.avgpool = base_model.avgpool
@@ -23,8 +27,12 @@ class MobileNetSmallV3(pl.LightningModule):
             nn.Dropout(p=0.2, inplace=True),
             nn.Linear(1024, num_classes)
         )
-
         self.classifier[-1].is_classifier = True
+
+        if pretrained is not None and pretrained.lower() != 'imagenet':
+            device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+            self.load_state_dict(torch.load(pretrained, map_location=device)['model_state_dict'])
+
         self._create_metrics(num_classes)
 
     def _create_metrics(self, num_classes):
@@ -91,14 +99,22 @@ class MobileNetSmallV3(pl.LightningModule):
 
 
 class ShuffleNetV2(pl.LightningModule):
-    def __init__(self, num_classes: int, pretrained=False):
+    def __init__(self, num_classes: int, pretrained: str = None):
         super().__init__()
         assert num_classes > 1, "Number of classes must be greater than" + str(num_classes)
-        model = models.shufflenet_v2_x0_5(weights=models.ShuffleNet_V2_X0_5_Weights.DEFAULT)
+
+        if pretrained is not None and pretrained.lower() == 'imagenet':
+            model = models.shufflenet_v2_x0_5(weights=models.ShuffleNet_V2_X0_5_Weights.DEFAULT)
+        else:
+            model = models.shufflenet_v2_x0_5()
 
         in_features = model.fc.in_features
         model.fc = nn.Linear(in_features, num_classes)
         model.fc.is_classifier = True
+
+        if pretrained is not None and pretrained.lower() != 'imagenet':
+            device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+            model.load_state_dict(torch.load(pretrained, map_location=device))
 
         self.model = model
         self._create_metrics(num_classes)
@@ -162,10 +178,14 @@ class ShuffleNetV2(pl.LightningModule):
 
 
 class SqueezeNetV1(pl.LightningModule):
-    def __init__(self, num_classes: int, pretrained=False):
+    def __init__(self, num_classes: int, pretrained: str = None):
         super().__init__()
         assert num_classes > 1, "Number of classes must be greater than" + str(num_classes)
-        base_model = models.squeezenet1_1(weights=models.SqueezeNet1_1_Weights.DEFAULT)
+
+        if pretrained is not None and pretrained.lower() == 'imagenet':
+            base_model = models.squeezenet1_1(weights=models.SqueezeNet1_1_Weights.DEFAULT)
+        else:
+            base_model = models.squeezenet1_1()
 
         self.features = base_model.features
         self.classifier = nn.Sequential(
@@ -174,8 +194,12 @@ class SqueezeNetV1(pl.LightningModule):
             nn.ReLU(inplace=True),
             nn.AdaptiveAvgPool2d(output_size=(1, 1))
         )
-
         self.classifier[1].is_classifier = True
+
+        if pretrained is not None and pretrained.lower() != 'imagenet':
+            device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+            self.load_state_dict(torch.load(pretrained, map_location=device))
+
         self._create_metrics(num_classes)
 
     def _create_metrics(self, num_classes):
