@@ -87,11 +87,13 @@ class PruningExperiment(Experiment):
 
     def run(self):
         constructor = getattr(strategies, self.strategy)
-        self.checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_acc1", mode='max')
+        self.checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_acc1", mode='max',
+                                                   dirpath=self.path / 'checkpoints')
         early_stop_callback = EarlyStopping(monitor="val_acc1", min_delta=0.00, patience=3, verbose=False,
                                             mode="max")
         self.trainer = pl.Trainer(default_root_dir=self.path, max_epochs=self.epochs,
                                   callbacks=[self.checkpoint_callback, early_stop_callback])
+        trainer = self.trainer
 
         for c in self.compression:
             logging.info(f'Running pruning experiment with compression {c}')
@@ -101,6 +103,11 @@ class PruningExperiment(Experiment):
             self.pruning.apply()
             self._fit()
             self._save_metrics(c)
+
+            # Until finding another way, this hacking is necessary
+            trainer.save_checkpoint(self.path / 'checkpoints' / f'compression={c}.ckpt')
+            early_stop_callback.wait_count = 0
+            trainer.should_stop = False
 
     def wrapup(self):
         pass
