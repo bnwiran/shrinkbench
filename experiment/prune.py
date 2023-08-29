@@ -101,6 +101,7 @@ class PruningExperiment(Experiment):
 
             self.pruning = constructor(self.model, x, y, compression=c)
             self.pruning.apply()
+            print(model_size(self.model))
             self._fit()
             self._save_metrics(c)
 

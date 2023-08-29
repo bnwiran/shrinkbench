@@ -12,7 +12,7 @@ class VisionPruning(Pruning):
     def __init__(self, model: nn.Module, inputs: Tensor = None, outputs: Tensor = None, compression=1):
         super().__init__(model, inputs, outputs, compression=compression)
         self.prunable = self.prunable_modules()
-        self.fraction = fraction_to_keep(self.compression, self.model, self.prunable)
+        self.fraction = fraction_to_keep(compression, self.model, self.prunable)
 
     def can_prune(self, module):
 
