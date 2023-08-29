@@ -21,7 +21,6 @@ from ..models.head import mark_classifier
 
 
 class PruningExperiment(Experiment):
-
     default_dl_kwargs = {
         'batch_size': 128,
         'pin_memory': False,
@@ -50,10 +49,8 @@ class PruningExperiment(Experiment):
 
         super().__init__(name, path, resume_exp, seed)
 
-        self.best_model_path = None
         self.resume = None
         self.trainer = None
-        self.checkpoint_callback = None
 
         if model_kwargs is None:
             model_kwargs = dict()
@@ -72,7 +69,6 @@ class PruningExperiment(Experiment):
         self._build_dataloaders(dataset, **dl_kwargs)
         self._build_model(model, resume, **model_kwargs)
         self._build_train(resume_optim=resume_optim, **train_kwargs)
-        self.save_freq = save_freq
 
         self.pruning = None
         self.strategy = strategy
@@ -87,12 +83,12 @@ class PruningExperiment(Experiment):
 
     def run(self):
         constructor = getattr(strategies, self.strategy)
-        self.checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_acc1", mode='max',
-                                                   dirpath=self.path / 'checkpoints')
+        checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_acc1", mode='max', save_last=True,
+                                              dirpath=self.path / 'checkpoints')
         early_stop_callback = EarlyStopping(monitor="val_acc1", min_delta=0.00, patience=3, verbose=False,
                                             mode="max")
         self.trainer = pl.Trainer(default_root_dir=self.path, max_epochs=self.epochs,
-                                  callbacks=[self.checkpoint_callback, early_stop_callback])
+                                  callbacks=[checkpoint_callback, early_stop_callback])
         trainer = self.trainer
 
         for c in self.compression:
@@ -101,7 +97,6 @@ class PruningExperiment(Experiment):
 
             self.pruning = constructor(self.model, x, y, compression=c)
             self.pruning.apply()
-            print(model_size(self.model))
             self._fit()
             self._save_metrics(c)
 
@@ -114,10 +109,7 @@ class PruningExperiment(Experiment):
         pass
 
     def _fit(self):
-        self.trainer.fit(model=self.model, train_dataloaders=self.train_dl, val_dataloaders=self.val_dl,
-                         ckpt_path=self.best_model_path)
-
-        self.best_model_path = self.checkpoint_callback.best_model_path
+        self.trainer.fit(model=self.model, train_dataloaders=self.train_dl, val_dataloaders=self.val_dl)
 
     def _build_dataloaders(self, dataset, **dl_kwargs):
         constructor = getattr(datasets, dataset)
