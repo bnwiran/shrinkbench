@@ -109,7 +109,8 @@ class PruningExperiment(Experiment):
         pass
 
     def _fit(self):
-        self.trainer.fit(model=self.model, train_dataloaders=self.train_dl, val_dataloaders=self.val_dl)
+        self.trainer.fit(model=self.model, train_dataloaders=self.train_dl, val_dataloaders=self.val_dl,
+                         ckpt_path='last')
 
     def _build_dataloaders(self, dataset, **dl_kwargs):
         constructor = getattr(datasets, dataset)

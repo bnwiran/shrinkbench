@@ -29,11 +29,16 @@ class MobileNetSmallV3(pl.LightningModule):
         )
         self.classifier[-1].is_classifier = True
 
+        for module in self.classifier.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight)
+
         if pretrained is not None and pretrained.lower() != 'imagenet':
             device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
             self.load_state_dict(torch.load(pretrained, map_location=device)['model_state_dict'])
 
         self._create_metrics(num_classes)
+        self.learning_rate = 5e-4
 
     def _create_metrics(self, num_classes):
         self.train_acc1 = MulticlassAccuracy(num_classes=num_classes)
@@ -94,7 +99,11 @@ class MobileNetSmallV3(pl.LightningModule):
         return logits
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=1e-3)
+        # TODO: try this weight_decay=0.001 with torch.optim.SGD, lr: 5e-4 or 5e-5
+        feature_params = self.features.parameters()
+        classifier_params = self.classifier.parameters()
+        params = [{'params': feature_params}, {'params': classifier_params, 'lr': self.learning_rate * 10}]
+        optimizer = optim.SGD(params, lr=self.learning_rate, weight_decay=0.001)
         return optimizer
 
 
@@ -111,6 +120,8 @@ class ShuffleNetV2(pl.LightningModule):
         in_features = model.fc.in_features
         model.fc = nn.Linear(in_features, num_classes)
         model.fc.is_classifier = True
+
+        nn.init.xavier_uniform_(model.fc.weight)
 
         if pretrained is not None and pretrained.lower() != 'imagenet':
             device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
@@ -195,6 +206,10 @@ class SqueezeNetV1(pl.LightningModule):
             nn.AdaptiveAvgPool2d(output_size=(1, 1))
         )
         self.classifier[1].is_classifier = True
+
+        for module in self.classifier.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight)
 
         if pretrained is not None and pretrained.lower() != 'imagenet':
             device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
