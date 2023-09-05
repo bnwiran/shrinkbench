@@ -38,7 +38,7 @@ class MobileNetSmallV3(pl.LightningModule):
             self.load_state_dict(torch.load(pretrained, map_location=device)['model_state_dict'])
 
         self._create_metrics(num_classes)
-        self.learning_rate = 5e-4
+        self.learning_rate = 1e-3
 
     def _create_metrics(self, num_classes):
         self.train_acc1 = MulticlassAccuracy(num_classes=num_classes)
@@ -99,11 +99,7 @@ class MobileNetSmallV3(pl.LightningModule):
         return logits
 
     def configure_optimizers(self):
-        # TODO: try this weight_decay=0.001 with torch.optim.SGD, lr: 5e-4 or 5e-5
-        feature_params = self.features.parameters()
-        classifier_params = self.classifier.parameters()
-        params = [{'params': feature_params}, {'params': classifier_params, 'lr': self.learning_rate * 10}]
-        optimizer = optim.SGD(params, lr=self.learning_rate, weight_decay=0.001)
+        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
 
 
