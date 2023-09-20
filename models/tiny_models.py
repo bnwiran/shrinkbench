@@ -1,10 +1,12 @@
 import os
 
 import lightning.pytorch as pl
+from . import utils
 import torch
 import torch.nn as nn
 from torch import optim, Tensor
 from torch.nn import functional as F
+from torch.optim.lr_scheduler import StepLR
 from torchmetrics.classification import MulticlassAccuracy
 from torchvision import models
 
@@ -15,38 +17,27 @@ class MobileNetSmallV3(pl.LightningModule):
         assert num_classes > 1, "Number of classes must be greater than" + str(num_classes)
 
         if pretrained is not None and pretrained.lower() == 'imagenet':
-            base_model = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
+            base_model = models.get_model('mobilenet_v3_small', weight=models.MobileNet_V3_Small_Weights.DEFAULT, num_classes=num_classes)
         else:
-            base_model = models.mobilenet_v3_small()
+            base_model = models.get_model('mobilenet_v3_small', num_classes=num_classes)
 
-        self.features = base_model.features
-        self.avgpool = base_model.avgpool
-        self.classifier = nn.Sequential(
-            nn.Linear(576, 1024),
-            nn.Hardswish(),
-            nn.Dropout(p=0.2, inplace=True),
-            nn.Linear(1024, num_classes)
-        )
-        self.classifier[-1].is_classifier = True
-
-        for module in self.classifier.modules():
-            if isinstance(module, nn.Linear):
-                nn.init.xavier_uniform_(module.weight)
+        base_model.classifier[-1].is_classifier = True
+        self.base_model = base_model
 
         if pretrained is not None and pretrained.lower() != 'imagenet':
             device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
             self.load_state_dict(torch.load(pretrained, map_location=device)['model_state_dict'])
 
         self._create_metrics(num_classes)
-        self.learning_rate = 1e-3
+        self.learning_rate = 1e-2
 
     def _create_metrics(self, num_classes):
-        self.train_acc1 = MulticlassAccuracy(num_classes=num_classes)
-        self.train_acc5 = MulticlassAccuracy(num_classes=num_classes, top_k=5)
-        self.val_acc1 = MulticlassAccuracy(num_classes=num_classes)
-        self.val_acc5 = MulticlassAccuracy(num_classes=num_classes, top_k=5)
-        self.test_acc1 = MulticlassAccuracy(num_classes=num_classes)
-        self.test_acc5 = MulticlassAccuracy(num_classes=num_classes, top_k=5)
+        self.train_acc1 = MulticlassAccuracy(num_classes=num_classes, average='micro')
+        self.train_acc5 = MulticlassAccuracy(num_classes=num_classes, average='micro', top_k=5)
+        self.val_acc1 = MulticlassAccuracy(num_classes=num_classes, average='micro')
+        self.val_acc5 = MulticlassAccuracy(num_classes=num_classes, average='micro', top_k=5)
+        self.test_acc1 = MulticlassAccuracy(num_classes=num_classes, average='micro')
+        self.test_acc5 = MulticlassAccuracy(num_classes=num_classes, average='micro', top_k=5)
 
     def training_step(self, batch, batch_idx) -> Tensor:
         x, y = batch
@@ -91,16 +82,18 @@ class MobileNetSmallV3(pl.LightningModule):
         return loss
 
     def forward(self, x):
-        x = self.features(x)
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        logits = self.classifier(x)
-
-        return logits
+        return self.base_model(x)
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
-        return optimizer
+        weight_decay = 1e-5
+        parameters = utils.set_weight_decay(
+            self.base_model,
+            weight_decay
+        )
+        #optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+        optimizer = optim.RMSprop(parameters, lr=0.064, momentum=0.9, weight_decay=weight_decay, eps=0.0316, alpha=0.9)
+        scheduler = StepLR(optimizer, step_size=3, gamma=0.973)
+        return ([optimizer], [scheduler])
 
 
 class ShuffleNetV2(pl.LightningModule):
@@ -127,12 +120,12 @@ class ShuffleNetV2(pl.LightningModule):
         self._create_metrics(num_classes)
 
     def _create_metrics(self, num_classes):
-        self.train_acc1 = MulticlassAccuracy(num_classes=num_classes)
-        self.train_acc5 = MulticlassAccuracy(num_classes=num_classes, top_k=5)
-        self.val_acc1 = MulticlassAccuracy(num_classes=num_classes)
-        self.val_acc5 = MulticlassAccuracy(num_classes=num_classes, top_k=5)
-        self.test_acc1 = MulticlassAccuracy(num_classes=num_classes)
-        self.test_acc5 = MulticlassAccuracy(num_classes=num_classes, top_k=5)
+        self.train_acc1 = MulticlassAccuracy(num_classes=num_classes, average='micro')
+        self.train_acc5 = MulticlassAccuracy(num_classes=num_classes, average='micro', top_k=5)
+        self.val_acc1 = MulticlassAccuracy(num_classes=num_classes, average='micro')
+        self.val_acc5 = MulticlassAccuracy(num_classes=num_classes, average='micro', top_k=5)
+        self.test_acc1 = MulticlassAccuracy(num_classes=num_classes, average='micro')
+        self.test_acc5 = MulticlassAccuracy(num_classes=num_classes, average='micro', top_k=5)
 
     def training_step(self, batch, batch_idx) -> Tensor:
         x, y = batch
@@ -214,12 +207,12 @@ class SqueezeNetV1(pl.LightningModule):
         self._create_metrics(num_classes)
 
     def _create_metrics(self, num_classes):
-        self.train_acc1 = MulticlassAccuracy(num_classes=num_classes)
-        self.train_acc5 = MulticlassAccuracy(num_classes=num_classes, top_k=5)
-        self.val_acc1 = MulticlassAccuracy(num_classes=num_classes)
-        self.val_acc5 = MulticlassAccuracy(num_classes=num_classes, top_k=5)
-        self.test_acc1 = MulticlassAccuracy(num_classes=num_classes)
-        self.test_acc5 = MulticlassAccuracy(num_classes=num_classes, top_k=5)
+        self.train_acc1 = MulticlassAccuracy(num_classes=num_classes, average='micro')
+        self.train_acc5 = MulticlassAccuracy(num_classes=num_classes, average='micro', top_k=5)
+        self.val_acc1 = MulticlassAccuracy(num_classes=num_classes, average='micro')
+        self.val_acc5 = MulticlassAccuracy(num_classes=num_classes, average='micro', top_k=5)
+        self.test_acc1 = MulticlassAccuracy(num_classes=num_classes, average='micro')
+        self.test_acc5 = MulticlassAccuracy(num_classes=num_classes, average='micro', top_k=5)
 
     def training_step(self, batch, batch_idx) -> Tensor:
         x, y = batch

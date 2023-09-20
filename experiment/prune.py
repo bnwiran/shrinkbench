@@ -85,10 +85,10 @@ class PruningExperiment(Experiment):
         constructor = getattr(strategies, self.strategy)
         checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_acc1", mode='max', save_last=True,
                                               dirpath=self.path / 'checkpoints')
-        early_stop_callback = EarlyStopping(monitor="val_acc1", min_delta=0.00, patience=3, verbose=False,
+        early_stop_callback = EarlyStopping(monitor="val_acc1", min_delta=0.00, patience=5, verbose=False,
                                             mode="max")
         self.trainer = pl.Trainer(default_root_dir=self.path, max_epochs=self.epochs,
-                                  callbacks=[checkpoint_callback, early_stop_callback])
+                                  callbacks=[checkpoint_callback])#callbacks=[checkpoint_callback, early_stop_callback])
         trainer = self.trainer
 
         for c in self.compression:
@@ -109,17 +109,17 @@ class PruningExperiment(Experiment):
         pass
 
     def _fit(self):
-        self.trainer.fit(model=self.model, train_dataloaders=self.train_dl, val_dataloaders=self.val_dl,
-                         ckpt_path='last')
+        self.trainer.fit(model=self.model, train_dataloaders=self.train_dl, val_dataloaders=self.val_dl, ckpt_path='last')
 
     def _build_dataloaders(self, dataset, **dl_kwargs):
         constructor = getattr(datasets, dataset)
-        dataset = constructor(train=True)
-        targets = dataset.targets
-        train_idx, val_idx = train_test_split(np.arange(len(targets)), test_size=dataset.val_size, random_state=42,
-                                              shuffle=True, stratify=targets)
-        train_dataset = Subset(dataset, train_idx)
-        val_dataset = Subset(dataset, val_idx)
+        train_dataset = constructor(train=True)
+        val_dataset = constructor(train=False)
+        #targets = dataset.targets
+        #train_idx, val_idx = train_test_split(np.arange(len(targets)), test_size=dataset.val_size, random_state=42,
+        #                                      shuffle=True, stratify=targets)
+        #train_dataset = Subset(dataset, train_idx)
+        #val_dataset = Subset(dataset, val_idx)
         self.train_dl = DataLoader(train_dataset, shuffle=True, **dl_kwargs)
         self.val_dl = DataLoader(val_dataset, shuffle=False, **dl_kwargs)
 
