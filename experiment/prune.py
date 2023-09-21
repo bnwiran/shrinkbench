@@ -4,14 +4,13 @@ import pathlib
 from typing import Union
 
 import lightning.pytorch as pl
-import numpy as np
 import torch
 import torchvision
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
-from sklearn.model_selection import train_test_split
 from torch import nn
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, default_collate
 
+from datasets.transforms import get_mixup_cutmix
 from . import Experiment
 from .. import datasets
 from .. import models
@@ -23,7 +22,7 @@ from ..models.head import mark_classifier
 class PruningExperiment(Experiment):
     default_dl_kwargs = {
         'batch_size': 128,
-        'pin_memory': False,
+        'pin_memory': True,
         'num_workers': 8
     }
     default_model_kwargs = {
@@ -88,7 +87,8 @@ class PruningExperiment(Experiment):
         early_stop_callback = EarlyStopping(monitor="val_acc1", min_delta=0.00, patience=5, verbose=False,
                                             mode="max")
         self.trainer = pl.Trainer(default_root_dir=self.path, max_epochs=self.epochs,
-                                  callbacks=[checkpoint_callback])#callbacks=[checkpoint_callback, early_stop_callback])
+                                  callbacks=[
+                                      checkpoint_callback])  # callbacks=[checkpoint_callback, early_stop_callback])
         trainer = self.trainer
 
         for c in self.compression:
@@ -109,19 +109,35 @@ class PruningExperiment(Experiment):
         pass
 
     def _fit(self):
-        self.trainer.fit(model=self.model, train_dataloaders=self.train_dl, val_dataloaders=self.val_dl, ckpt_path='last')
+        self.trainer.fit(model=self.model, train_dataloaders=self.train_dl, val_dataloaders=self.val_dl,
+                         ckpt_path='last')
 
     def _build_dataloaders(self, dataset, **dl_kwargs):
         constructor = getattr(datasets, dataset)
-        train_dataset = constructor(train=True)
-        val_dataset = constructor(train=False)
-        #targets = dataset.targets
-        #train_idx, val_idx = train_test_split(np.arange(len(targets)), test_size=dataset.val_size, random_state=42,
+        train_dataset, val_dataset, train_sampler, test_sampler = constructor()
+        num_classes = len(dataset.classes)
+        args = {'mixup_alpha': 0.2, 'cutmix_alpha': 1.0, 'use_v2': False}
+        mixup_cutmix = get_mixup_cutmix(
+            mixup_alpha=args['mixup_alpha'], cutmix_alpha=args['cutmix_alpha'], num_categories=num_classes,
+            use_v2=args['use_v2']
+        )
+        if mixup_cutmix is not None:
+
+            def collate_fn(batch):
+                return mixup_cutmix(*default_collate(batch))
+
+        else:
+            collate_fn = default_collate
+
+        # train_dataset = constructor(train=True)
+        # val_dataset = constructor(train=False)
+        # targets = dataset.targets
+        # train_idx, val_idx = train_test_split(np.arange(len(targets)), test_size=dataset.val_size, random_state=42,
         #                                      shuffle=True, stratify=targets)
-        #train_dataset = Subset(dataset, train_idx)
-        #val_dataset = Subset(dataset, val_idx)
-        self.train_dl = DataLoader(train_dataset, shuffle=True, **dl_kwargs)
-        self.val_dl = DataLoader(val_dataset, shuffle=False, **dl_kwargs)
+        # train_dataset = Subset(dataset, train_idx)
+        # val_dataset = Subset(dataset, val_idx)
+        self.train_dl = DataLoader(train_dataset, sampler=train_sampler, collate_fn=collate_fn, **dl_kwargs)
+        self.val_dl = DataLoader(val_dataset, sampler=test_sampler, **dl_kwargs)
 
     def _build_model(self, model, resume=None, **model_kwargs):
         if isinstance(model, str):

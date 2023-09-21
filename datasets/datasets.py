@@ -1,6 +1,12 @@
 import os
 
+import presets
+import torch
+import torchvision
 from torchvision import transforms, datasets
+from torchvision.transforms.functional import InterpolationMode
+
+import time
 
 from . import places365
 
@@ -74,6 +80,73 @@ def dataset_builder(dataset, train=True, normalize=None, preproc=None, path=None
     return _constructors[dataset](path, **kwargs)
 
 
+def load_data(root_dir, dataset_name, args):
+    # Data loading code
+    print("Loading data")
+    val_resize_size, val_crop_size, train_crop_size = (
+        args['val_resize_size'],
+        args['val_crop_size'],
+        args['train_crop_size'],
+    )
+    interpolation = InterpolationMode(args['interpolation'])
+
+    print("Loading training data")
+    st = time.time()
+
+    # We need a default value for the variables below because args may come
+    # from train_quantization.py which doesn't define them.
+    auto_augment_policy = args.get("auto_augment", None)
+    random_erase_prob = args.get("random_erase", 0.0)
+    ra_magnitude = args.get("ra_magnitude", None)
+    augmix_severity = args.get("augmix_severity", None)
+    dataset = _constructors[dataset_name](
+        root_dir,
+        presets.ClassificationPresetTrain(
+            mean=args['mean'],
+            std=args['std'],
+            crop_size=train_crop_size,
+            interpolation=interpolation,
+            auto_augment_policy=auto_augment_policy,
+            random_erase_prob=random_erase_prob,
+            ra_magnitude=ra_magnitude,
+            augmix_severity=augmix_severity,
+            backend=args['backend'],
+            use_v2=args['use_v2'],
+        ),
+        train=True
+    )
+
+    print("Took", time.time() - st)
+
+    print("Loading validation data")
+    if args['weights'] and args['test_only']:
+        weights = torchvision.models.get_weight(args['weights'])
+        preprocessing = weights.transforms(antialias=True)
+        if args['backend'] == "tensor":
+            preprocessing = transforms.Compose([torchvision.transforms.PILToTensor(), preprocessing])
+
+    else:
+        preprocessing = presets.ClassificationPresetEval(
+            crop_size=val_crop_size,
+            resize_size=val_resize_size,
+            interpolation=interpolation,
+            backend=args['backend'],
+            use_v2=args['use_v2'],
+        )
+
+    dataset_test = _constructors[dataset_name](
+        root_dir,
+        preprocessing,
+        train=False
+    )
+
+    print("Creating data loaders")
+    train_sampler = torch.utils.data.RandomSampler(dataset)
+    test_sampler = torch.utils.data.SequentialSampler(dataset_test)
+
+    return dataset, dataset_test, train_sampler, test_sampler
+
+
 def MNIST(train=True, path=None):
     """Thin wrapper around torchvision.datasets.CIFAR10
     """
@@ -103,16 +176,13 @@ def CIFAR10(train=True, path=None):
 def CIFAR100(train=True, path=None):
     """Thin wrapper around torchvision.datasets.CIFAR100
     """
+    dataset_name = 'CIFAR100'
     mean, std = [0.507, 0.487, 0.441], [0.267, 0.256, 0.276]
-    normalize = transforms.Normalize(mean=mean, std=std)
-    if train:
-        preproc = [transforms.RandomResizedCrop(224), transforms.RandomHorizontalFlip()]
-    else:
-        preproc = [transforms.Resize(256), transforms.CenterCrop(224)]
-    dataset = dataset_builder('CIFAR100', train, normalize, preproc, path)
-    dataset.shape = (3, 32, 32)
-    dataset.val_size = 0.2
-    return dataset
+    root_dir = dataset_path(dataset_name, path)
+    args = {'val_resize_size': 232, 'val_crop_size': 224, 'train_crop_size': 176, 'interpolation': 'bilinear',
+            'backend': 'PIL', 'use_v2': False, 'auto-augment': 'ta_wide',
+            'mean': mean, 'std': std}
+    return load_data(root_dir, dataset_name, args)
 
 
 def ImageNet(train=True, path=None):

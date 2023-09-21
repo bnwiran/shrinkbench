@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 from torch import optim, Tensor
 from torch.nn import functional as F
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR
 from torchmetrics.classification import MulticlassAccuracy
 from torchvision import models
 
@@ -17,7 +17,8 @@ class MobileNetSmallV3(pl.LightningModule):
         assert num_classes > 1, "Number of classes must be greater than" + str(num_classes)
 
         if pretrained is not None and pretrained.lower() == 'imagenet':
-            base_model = models.get_model('mobilenet_v3_small', weight=models.MobileNet_V3_Small_Weights.DEFAULT, num_classes=num_classes)
+            base_model = models.get_model('mobilenet_v3_small', weight=models.MobileNet_V3_Small_Weights.DEFAULT,
+                                          num_classes=num_classes)
         else:
             base_model = models.get_model('mobilenet_v3_small', num_classes=num_classes)
 
@@ -90,10 +91,9 @@ class MobileNetSmallV3(pl.LightningModule):
             self.base_model,
             weight_decay
         )
-        #optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
         optimizer = optim.RMSprop(parameters, lr=0.064, momentum=0.9, weight_decay=weight_decay, eps=0.0316, alpha=0.9)
         scheduler = StepLR(optimizer, step_size=3, gamma=0.973)
-        return ([optimizer], [scheduler])
+        return [optimizer], [scheduler]
 
 
 class ShuffleNetV2(pl.LightningModule):
@@ -102,21 +102,26 @@ class ShuffleNetV2(pl.LightningModule):
         assert num_classes > 1, "Number of classes must be greater than" + str(num_classes)
 
         if pretrained is not None and pretrained.lower() == 'imagenet':
-            model = models.shufflenet_v2_x0_5(weights=models.ShuffleNet_V2_X0_5_Weights.DEFAULT)
+            base_model = models.get_model('shufflenet_v2_x0_5', weight=models.ShuffleNet_V2_X0_5_Weights.DEFAULT,
+                                          num_classes=num_classes)
         else:
-            model = models.shufflenet_v2_x0_5()
+            base_model = models.get_model('shufflenet_v2_x0_5', num_classes=num_classes)
 
-        in_features = model.fc.in_features
-        model.fc = nn.Linear(in_features, num_classes)
-        model.fc.is_classifier = True
-
-        nn.init.xavier_uniform_(model.fc.weight)
+        # if pretrained is not None and pretrained.lower() == 'imagenet':
+        #     model = models.shufflenet_v2_x0_5(weights=models.ShuffleNet_V2_X0_5_Weights.DEFAULT)
+        # else:
+        #     model = models.shufflenet_v2_x0_5()
+        #
+        # in_features = model.fc.in_features
+        # model.fc = nn.Linear(in_features, num_classes)
+        base_model.fc.is_classifier = True
 
         if pretrained is not None and pretrained.lower() != 'imagenet':
             device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-            model.load_state_dict(torch.load(pretrained, map_location=device))
+            base_model.load_state_dict(torch.load(pretrained, map_location=device))
 
-        self.model = model
+        self.label_smoothing = 0.1
+        self.base_model = base_model
         self._create_metrics(num_classes)
 
     def _create_metrics(self, num_classes):
@@ -131,7 +136,7 @@ class ShuffleNetV2(pl.LightningModule):
         x, y = batch
         logits = self(x)
 
-        loss = nn.functional.cross_entropy(logits, y)
+        loss = nn.functional.cross_entropy(logits, y, label_smoothing=self.label_smoothing)
 
         self.train_acc1(logits, y)
         self.train_acc5(logits, y)
@@ -145,7 +150,7 @@ class ShuffleNetV2(pl.LightningModule):
         x, y = batch
         logits = self(x)
 
-        loss = F.cross_entropy(logits, y)
+        loss = F.cross_entropy(logits, y, label_smoothing=self.label_smoothing)
 
         self.val_acc1(logits, y)
         self.val_acc5(logits, y)
@@ -159,7 +164,7 @@ class ShuffleNetV2(pl.LightningModule):
         x, y = batch
         logits = self(x)
 
-        loss = F.cross_entropy(logits, y)
+        loss = F.cross_entropy(logits, y, label_smoothing=self.label_smoothing)
 
         self.test_acc1(logits, y)
         self.test_acc5(logits, y)
@@ -170,11 +175,29 @@ class ShuffleNetV2(pl.LightningModule):
         return loss
 
     def forward(self, x):
-        return self.model(x)
+        return self.base_model(x)
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.model.parameters(), lr=1e-3)
-        return optimizer
+        weight_decay = 2e-5
+        lr_warmup_decay = 0.01
+        lr_warmup_epochs = 5
+        epochs = 700
+        lr_min = 0
+        norm_weight_decay = 0
+        parameters = utils.set_weight_decay(
+            self.base_model,
+            weight_decay,
+            norm_weight_decay=norm_weight_decay
+        )
+        optimizer = optim.SGD(parameters, lr=0.5, momentum=0.9, weight_decay=weight_decay, nesterov=False)
+        main_lr_scheduler = CosineAnnealingLR(optimizer, T_max=epochs - lr_warmup_epochs, eta_min=lr_min)
+        warmup_lr_scheduler = torch.optim.lr_scheduler.ConstantLR(
+            optimizer, factor=lr_warmup_decay, total_iters=lr_warmup_epochs
+        )
+        lr_scheduler = torch.optim.lr_scheduler.SequentialLR(
+            optimizer, schedulers=[warmup_lr_scheduler, main_lr_scheduler], milestones=[lr_warmup_epochs]
+        )
+        return [optimizer], [lr_scheduler]
 
 
 class SqueezeNetV1(pl.LightningModule):
