@@ -1,6 +1,6 @@
 import os
 
-import presets
+from . import presets
 import torch
 import torchvision
 from torchvision import transforms, datasets
@@ -100,8 +100,8 @@ def load_data(root_dir, dataset_name, args):
     ra_magnitude = args.get("ra_magnitude", None)
     augmix_severity = args.get("augmix_severity", None)
     dataset = _constructors[dataset_name](
-        root_dir,
-        presets.ClassificationPresetTrain(
+        root=root_dir,
+        transform=presets.ClassificationPresetTrain(
             mean=args['mean'],
             std=args['std'],
             crop_size=train_crop_size,
@@ -179,9 +179,9 @@ def CIFAR100(train=True, path=None):
     dataset_name = 'CIFAR100'
     mean, std = [0.507, 0.487, 0.441], [0.267, 0.256, 0.276]
     root_dir = dataset_path(dataset_name, path)
-    args = {'val_resize_size': 232, 'val_crop_size': 224, 'train_crop_size': 176, 'interpolation': 'bilinear',
-            'backend': 'PIL', 'use_v2': False, 'auto-augment': 'ta_wide',
-            'mean': mean, 'std': std}
+    args = {'val_resize_size': 256, 'val_crop_size': 224, 'train_crop_size': 224, 'interpolation': 'bilinear',
+            'backend': 'PIL', 'use_v2': False, 'auto_augment': 'imagenet', 'random_erase': 0.2, 'weights': None,
+            'test_only': False, 'mean': mean, 'std': std}
     return load_data(root_dir, dataset_name, args)
 
 

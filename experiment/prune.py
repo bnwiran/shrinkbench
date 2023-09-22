@@ -10,7 +10,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from torch import nn
 from torch.utils.data import DataLoader, default_collate
 
-from datasets.transforms import get_mixup_cutmix
+from ..datasets.transforms import get_mixup_cutmix
 from . import Experiment
 from .. import datasets
 from .. import models

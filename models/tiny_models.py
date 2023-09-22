@@ -1,14 +1,14 @@
-import os
-
 import lightning.pytorch as pl
-from . import utils
 import torch
 import torch.nn as nn
 from torch import optim, Tensor
 from torch.nn import functional as F
-from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR
+from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR, SequentialLR, ConstantLR
 from torchmetrics.classification import MulticlassAccuracy
 from torchvision import models
+
+
+from . import utils
 
 
 class MobileNetSmallV3(pl.LightningModule):
@@ -30,7 +30,11 @@ class MobileNetSmallV3(pl.LightningModule):
             self.load_state_dict(torch.load(pretrained, map_location=device)['model_state_dict'])
 
         self._create_metrics(num_classes)
-        self.learning_rate = 1e-2
+        self.learning_rate = 0.064
+        self.weight_decay = 1e-5
+        self.momentum = 0.9
+        self.lr_step_size = 2
+        self.lr_gamma = 0.973
 
     def _create_metrics(self, num_classes):
         self.train_acc1 = MulticlassAccuracy(num_classes=num_classes, average='micro')
@@ -44,7 +48,7 @@ class MobileNetSmallV3(pl.LightningModule):
         x, y = batch
         logits = self(x)
 
-        loss = nn.functional.cross_entropy(logits, y)
+        loss = F.cross_entropy(logits, y)
 
         self.train_acc1(logits, y)
         self.train_acc5(logits, y)
@@ -86,13 +90,13 @@ class MobileNetSmallV3(pl.LightningModule):
         return self.base_model(x)
 
     def configure_optimizers(self):
-        weight_decay = 1e-5
         parameters = utils.set_weight_decay(
             self.base_model,
-            weight_decay
+            self.weight_decay
         )
-        optimizer = optim.RMSprop(parameters, lr=0.064, momentum=0.9, weight_decay=weight_decay, eps=0.0316, alpha=0.9)
-        scheduler = StepLR(optimizer, step_size=3, gamma=0.973)
+        optimizer = optim.RMSprop(parameters, lr=self.learning_rate, momentum=self.momentum,
+                                  weight_decay=self.weight_decay, eps=0.0316, alpha=0.9)
+        scheduler = StepLR(optimizer, step_size=self.lr_step_size, gamma=self.lr_gamma)
         return [optimizer], [scheduler]
 
 
@@ -107,13 +111,6 @@ class ShuffleNetV2(pl.LightningModule):
         else:
             base_model = models.get_model('shufflenet_v2_x0_5', num_classes=num_classes)
 
-        # if pretrained is not None and pretrained.lower() == 'imagenet':
-        #     model = models.shufflenet_v2_x0_5(weights=models.ShuffleNet_V2_X0_5_Weights.DEFAULT)
-        # else:
-        #     model = models.shufflenet_v2_x0_5()
-        #
-        # in_features = model.fc.in_features
-        # model.fc = nn.Linear(in_features, num_classes)
         base_model.fc.is_classifier = True
 
         if pretrained is not None and pretrained.lower() != 'imagenet':
@@ -136,7 +133,10 @@ class ShuffleNetV2(pl.LightningModule):
         x, y = batch
         logits = self(x)
 
-        loss = nn.functional.cross_entropy(logits, y, label_smoothing=self.label_smoothing)
+        loss = F.cross_entropy(logits, y, label_smoothing=self.label_smoothing)
+
+        if y.ndim == 2:
+            y = y.max(dim=1)[1]
 
         self.train_acc1(logits, y)
         self.train_acc5(logits, y)
@@ -191,10 +191,8 @@ class ShuffleNetV2(pl.LightningModule):
         )
         optimizer = optim.SGD(parameters, lr=0.5, momentum=0.9, weight_decay=weight_decay, nesterov=False)
         main_lr_scheduler = CosineAnnealingLR(optimizer, T_max=epochs - lr_warmup_epochs, eta_min=lr_min)
-        warmup_lr_scheduler = torch.optim.lr_scheduler.ConstantLR(
-            optimizer, factor=lr_warmup_decay, total_iters=lr_warmup_epochs
-        )
-        lr_scheduler = torch.optim.lr_scheduler.SequentialLR(
+        warmup_lr_scheduler = ConstantLR(optimizer, factor=lr_warmup_decay, total_iters=lr_warmup_epochs)
+        lr_scheduler = SequentialLR(
             optimizer, schedulers=[warmup_lr_scheduler, main_lr_scheduler], milestones=[lr_warmup_epochs]
         )
         return [optimizer], [lr_scheduler]
