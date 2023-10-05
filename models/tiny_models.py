@@ -7,8 +7,11 @@ from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR, SequentialLR, Co
 from torchmetrics.classification import MulticlassAccuracy
 from torchvision import models
 
-
 from . import utils
+
+
+def get_optimizer(args):
+    pass
 
 
 class MobileNetSmallV3(pl.LightningModule):
@@ -49,6 +52,9 @@ class MobileNetSmallV3(pl.LightningModule):
         logits = self(x)
 
         loss = F.cross_entropy(logits, y)
+
+        if y.ndim == 2:
+            y = y.max(dim=1)[1]
 
         self.train_acc1(logits, y)
         self.train_acc5(logits, y)

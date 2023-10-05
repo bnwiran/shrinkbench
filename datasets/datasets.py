@@ -18,7 +18,6 @@ _constructors = {
     'Places365': places365.Places365
 }
 
-
 def dataset_path(dataset, path=None):
     """Get the path to a specified dataset
 
@@ -99,19 +98,25 @@ def load_data(root_dir, dataset_name, args):
     random_erase_prob = args.get("random_erase", 0.0)
     ra_magnitude = args.get("ra_magnitude", None)
     augmix_severity = args.get("augmix_severity", None)
+
+    use_v2 = args['use_v2']
+    backend = args['backend']
+    mean = args['mean']
+    std = args['std']
+
     dataset = _constructors[dataset_name](
         root=root_dir,
         transform=presets.ClassificationPresetTrain(
-            mean=args['mean'],
-            std=args['std'],
+            mean=mean,
+            std=std,
             crop_size=train_crop_size,
             interpolation=interpolation,
             auto_augment_policy=auto_augment_policy,
             random_erase_prob=random_erase_prob,
             ra_magnitude=ra_magnitude,
             augmix_severity=augmix_severity,
-            backend=args['backend'],
-            use_v2=args['use_v2'],
+            backend=backend,
+            use_v2=use_v2,
         ),
         train=True
     )
@@ -119,24 +124,26 @@ def load_data(root_dir, dataset_name, args):
     print("Took", time.time() - st)
 
     print("Loading validation data")
-    if args['weights'] and args['test_only']:
-        weights = torchvision.models.get_weight(args['weights'])
-        preprocessing = weights.transforms(antialias=True)
-        if args['backend'] == "tensor":
-            preprocessing = transforms.Compose([torchvision.transforms.PILToTensor(), preprocessing])
+    weights = args['weights']
+    test_only = args['test_only']
 
+    if weights and test_only:
+        weights = torchvision.models.get_weight(weights)
+        preprocessing = weights.transforms(antialias=True)
+        if backend == "tensor":
+            preprocessing = transforms.Compose([transforms.PILToTensor(), preprocessing])
     else:
         preprocessing = presets.ClassificationPresetEval(
             crop_size=val_crop_size,
             resize_size=val_resize_size,
             interpolation=interpolation,
-            backend=args['backend'],
-            use_v2=args['use_v2'],
+            backend=backend,
+            use_v2=use_v2,
         )
 
     dataset_test = _constructors[dataset_name](
-        root_dir,
-        preprocessing,
+        root=root_dir,
+        transform=preprocessing,
         train=False
     )
 
@@ -173,15 +180,18 @@ def CIFAR10(train=True, path=None):
     return dataset
 
 
-def CIFAR100(train=True, path=None):
+def CIFAR100(path=None, args=None):
     """Thin wrapper around torchvision.datasets.CIFAR100
     """
     dataset_name = 'CIFAR100'
     mean, std = [0.507, 0.487, 0.441], [0.267, 0.256, 0.276]
     root_dir = dataset_path(dataset_name, path)
-    args = {'val_resize_size': 256, 'val_crop_size': 224, 'train_crop_size': 224, 'interpolation': 'bilinear',
-            'backend': 'PIL', 'use_v2': False, 'auto_augment': 'imagenet', 'random_erase': 0.2, 'weights': None,
-            'test_only': False, 'mean': mean, 'std': std}
+    if args is None:
+        args = dict()
+
+    args['mean'] = mean
+    args['std'] = std
+
     return load_data(root_dir, dataset_name, args)
 
 

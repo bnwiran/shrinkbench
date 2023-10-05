@@ -23,10 +23,45 @@ class PruningExperiment(Experiment):
     default_dl_kwargs = {
         'batch_size': 128,
         'pin_memory': True,
-        'num_workers': 8
+        'num_workers': 8,
+        'mixup_alpha': 0.0,
+        'cutmix_alpha': 0.0,
+    }
+    default_ds_kwargs = {
+        'val_resize_size': 256,
+        'val_crop_size': 224,
+        'train_crop_size': 224,
+        'interpolation': 'bilinear',
+        'backend': 'PIL',
+        'use_v2': False,
+        'weights': None,
+        'auto_augment': None,
+        'random_erase': 0.0,
+        'ra_magnitude': 9,
+        'augmix_severity': 3,
+        'cache_dataset': False,
+        'test_only': False,
+        'ra_sampler': False,
+        'distributed': False,
+        'ra_reps': 3,
     }
     default_model_kwargs = {
         'pretrained': None
+    }
+    default_opt_kwargs = {
+        'learning_rate': 0.1,
+        'weight_decay': 1e-4,
+        'norm_weight_decay': None,
+        'bias_weight_decay': None,
+        'momentum': 0.9,
+        'lr_step_size': 30,
+        'lr_gamma': 0.1,
+        'lr_min': 0.0,
+        'lr_scheduler': 'steplr',
+        'lr_warmup_method': 'constant',
+        'lr-warmup_decay': '0.01',
+        'lr_warmup_epochs': 0.0,
+        'label_smoothing': 0.0,
     }
 
     def __init__(self,
@@ -39,6 +74,7 @@ class PruningExperiment(Experiment):
                  seed: int = 42,
                  path: str = None,
                  model_kwargs=None,
+                 ds_kwargs=None,
                  dl_kwargs=None,
                  train_kwargs=None,
                  debug: bool = False,
@@ -54,18 +90,23 @@ class PruningExperiment(Experiment):
         if model_kwargs is None:
             model_kwargs = dict()
 
+        if ds_kwargs is None:
+            ds_kwargs = dict()
+
         if dl_kwargs is None:
             dl_kwargs = dict()
 
+        ds_kwargs = {**self.default_ds_kwargs, **ds_kwargs}
         dl_kwargs = {**self.default_dl_kwargs, **dl_kwargs}
         model_kwargs = {**self.default_model_kwargs, **model_kwargs}
 
         params = locals()
+        params['ds_kwargs'] = ds_kwargs
         params['dl_kwargs'] = dl_kwargs
         params['model_kwargs'] = model_kwargs
 
         self.add_params(**params)
-        self._build_dataloaders(dataset, **dl_kwargs)
+        self._build_dataloaders(dataset, ds_kwargs, **dl_kwargs)
         self._build_model(model, resume, **model_kwargs)
         self._build_train(resume_optim=resume_optim, **train_kwargs)
 
@@ -86,10 +127,9 @@ class PruningExperiment(Experiment):
                                               dirpath=self.path / 'checkpoints')
         early_stop_callback = EarlyStopping(monitor="val_acc1", min_delta=0.00, patience=5, verbose=False,
                                             mode="max")
-        self.trainer = pl.Trainer(default_root_dir=self.path, max_epochs=self.epochs,
-                                  callbacks=[
-                                      checkpoint_callback])  # callbacks=[checkpoint_callback, early_stop_callback])
-        trainer = self.trainer
+        trainer = pl.Trainer(default_root_dir=self.path, max_epochs=self.epochs,
+                             callbacks=[checkpoint_callback])  # callbacks=[checkpoint_callback, early_stop_callback])
+        self.trainer = trainer
 
         for c in self.compression:
             logging.info(f'Running pruning experiment with compression {c}')
@@ -112,32 +152,31 @@ class PruningExperiment(Experiment):
         self.trainer.fit(model=self.model, train_dataloaders=self.train_dl, val_dataloaders=self.val_dl,
                          ckpt_path='last')
 
-    def _build_dataloaders(self, dataset, **dl_kwargs):
+    def _build_dataloaders(self, dataset, ds_kwargs, **dl_kwargs):
         constructor = getattr(datasets, dataset)
-        train_dataset, val_dataset, train_sampler, test_sampler = constructor()
-        num_classes = len(dataset.classes)
-        args = {'mixup_alpha': 0.2, 'cutmix_alpha': 1.0, 'use_v2': False}
+        train_dataset, val_dataset, train_sampler, test_sampler = constructor(args=ds_kwargs)
+        num_classes = len(train_dataset.classes)
+        collate_fn = self._get_collate_fn(dl_kwargs, num_classes)
+
+        batch_size = dl_kwargs['batch_size']
+        num_workers = dl_kwargs['num_workers']
+        pin_memory = dl_kwargs['pin_memory']
+        self.train_dl = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler, num_workers=num_workers,
+                                   pin_memory=pin_memory, collate_fn=collate_fn)
+        self.val_dl = DataLoader(val_dataset, batch_size=batch_size, sampler=test_sampler, num_workers=num_workers,
+                                 pin_memory=pin_memory)
+
+    def _get_collate_fn(self, dl_kwargs, num_classes):
         mixup_cutmix = get_mixup_cutmix(
-            mixup_alpha=args['mixup_alpha'], cutmix_alpha=args['cutmix_alpha'], num_categories=num_classes,
-            use_v2=args['use_v2']
+            mixup_alpha=dl_kwargs['mixup_alpha'], cutmix_alpha=dl_kwargs['cutmix_alpha'], num_categories=num_classes,
+            use_v2=dl_kwargs['use_v2']
         )
         if mixup_cutmix is not None:
-
             def collate_fn(batch):
                 return mixup_cutmix(*default_collate(batch))
-
         else:
             collate_fn = default_collate
-
-        # train_dataset = constructor(train=True)
-        # val_dataset = constructor(train=False)
-        # targets = dataset.targets
-        # train_idx, val_idx = train_test_split(np.arange(len(targets)), test_size=dataset.val_size, random_state=42,
-        #                                      shuffle=True, stratify=targets)
-        # train_dataset = Subset(dataset, train_idx)
-        # val_dataset = Subset(dataset, val_idx)
-        self.train_dl = DataLoader(train_dataset, sampler=train_sampler, collate_fn=collate_fn, **dl_kwargs)
-        self.val_dl = DataLoader(val_dataset, sampler=test_sampler, **dl_kwargs)
+        return collate_fn
 
     def _build_model(self, model, resume=None, **model_kwargs):
         if isinstance(model, str):
