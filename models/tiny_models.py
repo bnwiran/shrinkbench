@@ -21,12 +21,16 @@ class MobileNetSmallV3(pl.LightningModule):
 
         self.features = base_model.features
         self.avgpool = base_model.avgpool
-        self.classifier = nn.Sequential(
-            nn.Linear(576, 1024),
-            nn.Hardswish(),
-            nn.Dropout(p=0.2, inplace=True),
-            nn.Linear(1024, num_classes)
-        )
+        if num_classes == 1000:
+            self.classifier = base_model.classifier
+        else:
+            self.classifier = nn.Sequential(
+                nn.Linear(576, 1024),
+                nn.Hardswish(),
+                nn.Dropout(p=0.2, inplace=True),
+                nn.Linear(1024, num_classes)
+            )
+
         self.classifier[-1].is_classifier = True
 
         if pretrained is not None and pretrained.lower() != 'imagenet':
@@ -94,7 +98,7 @@ class MobileNetSmallV3(pl.LightningModule):
         return logits
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = optim.Adam(self.parameters(), lr=5e-4)
         return optimizer
 
 

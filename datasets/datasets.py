@@ -65,6 +65,7 @@ def dataset_builder(dataset, train=True, normalize=None, preproc=None, path=None
               'download': True}
     if dataset == 'ImageNet':
         kwargs['split'] = 'train' if train else 'val'
+        del kwargs['download']
     else:
         kwargs['train'] = train
 
